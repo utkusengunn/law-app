@@ -1,0 +1,48 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install Gradle 8.4 (used only to generate the wrapper)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.4'
+
+      - name: Generate Gradle wrapper (if missing)
+        working-directory: android
+        run: |
+          if [ ! -f gradlew ]; then
+            gradle wrapper --gradle-version 8.4 --distribution-type all
+          fi
+          chmod +x gradlew || true
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: law-app-release
+          path: build/app/outputs/flutter-apk/app-release.apk
