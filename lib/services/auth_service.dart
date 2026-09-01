@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'profile_service.dart';
@@ -74,7 +76,13 @@ class AuthService {
 
   Future<void> signOut() async {
     try {
-      await _auth.signOut();
+      // FirebaseAuth.signOut() yerel olarak çalışır ama bazı Android
+      // cihazlarda/ağ koşullarında dahili temizlik birkaç saniye sürebilir.
+      // Kullanıcıyı süresiz bloklamamak için üst sınır koyuyoruz - zaman
+      // aşımında dahi yerel oturum durumu genelde zaten temizlenmiş olur.
+      await _auth.signOut().timeout(const Duration(seconds: 6));
+    } on TimeoutException {
+      // Sessizce devam et; authStateChanges zaten tetiklenmiş olacaktır.
     } catch (_) {
       throw AuthFailure(_genericMessage);
     }

@@ -9,7 +9,7 @@ import 'meeting.dart';
 import 'payment.dart';
 
 /// Tüm Hive TypeAdapter'larını tek noktadan kayıt eder.
-/// typeId 0-6 aralığı bu 7 model için ayrılmıştır, çakışma yoktur.
+/// typeId 0-7 aralığı bu 8 model için ayrılmıştır, çakışma yoktur.
 class HiveRegistrar {
   HiveRegistrar._();
 
@@ -21,5 +21,6 @@ class HiveRegistrar {
     Hive.registerAdapter(MeetingAdapter());
     Hive.registerAdapter(LegalTaskAdapter());
     Hive.registerAdapter(PaymentAdapter());
+    Hive.registerAdapter(PaymentInstallmentAdapter());
   }
 }

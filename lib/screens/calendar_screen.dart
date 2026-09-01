@@ -131,16 +131,21 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }
 
     for (final Payment p in _paymentService.getAll()) {
-      if (p.dueDate == null) continue;
-      if (p.status != PaymentStatus.waiting && p.status != PaymentStatus.partial) {
+      final due = p.effectiveDueDate;
+      if (due == null) continue;
+      final effective = p.effectiveStatus;
+      if (effective != PaymentStatus.waiting &&
+          effective != PaymentStatus.partial &&
+          effective != PaymentStatus.overdue) {
         continue;
       }
       addEntry(
-        p.dueDate!,
+        due,
         _CalendarEntry(
-          date: p.dueDate!,
+          date: due,
           type: AppEventType.payment,
-          title: '${p.paymentType} · ${p.amount.toStringAsFixed(2)} ${p.currency}',
+          title:
+              '${p.paymentType} · Kalan ${p.remainingAmount.toStringAsFixed(2)} ${p.currency}',
           subtitle: 'Vade',
           onTap: () => _push(ClientDetailScreen(clientId: p.clientId)),
         ),

@@ -42,10 +42,10 @@ class _PaymentsListScreenState extends State<PaymentsListScreen> {
     try {
       var result = _service.getAll();
       if (_filter != null) {
-        result = result.where((p) => p.status == _filter).toList();
+        result = result.where((p) => p.effectiveStatus == _filter).toList();
       }
-      result.sort((a, b) =>
-          (a.dueDate ?? a.createdAt).compareTo(b.dueDate ?? b.createdAt));
+      result.sort((a, b) => (a.effectiveDueDate ?? a.createdAt)
+          .compareTo(b.effectiveDueDate ?? b.createdAt));
       setState(() {
         _payments = result;
         _loading = false;
@@ -70,10 +70,10 @@ class _PaymentsListScreenState extends State<PaymentsListScreen> {
             child: Row(
               children: [
                 _filterChip(null, 'Tümü'),
-                _filterChip(PaymentStatus.waiting, 'Bekleyen'),
-                _filterChip(PaymentStatus.partial, 'Kısmi'),
+                _filterChip(PaymentStatus.waiting, 'Ödenmedi'),
+                _filterChip(PaymentStatus.partial, 'Kısmen Ödendi'),
                 _filterChip(PaymentStatus.paid, 'Ödendi'),
-                _filterChip(PaymentStatus.overdue, 'Gecikti'),
+                _filterChip(PaymentStatus.overdue, 'Gecikmiş'),
               ],
             ),
           ),
@@ -109,15 +109,20 @@ class _PaymentsListScreenState extends State<PaymentsListScreen> {
       itemBuilder: (context, index) {
         final p = _payments[index];
         final client = _clientService.getById(p.clientId);
+        final due = p.effectiveDueDate;
+        final statusText = p.hasPlan
+            ? '${EnumLabels.paymentStatus(p.effectiveStatus)} · Kalan ${p.remainingAmount.toStringAsFixed(2)} ${p.currency}'
+            : EnumLabels.paymentStatus(p.effectiveStatus);
         return ListTile(
           leading: const Icon(Icons.payments_outlined),
           title: Text('${p.paymentType} · ${p.amount.toStringAsFixed(2)} ${p.currency}'),
           subtitle: Text(
               '${client?.displayName ?? 'Bilinmeyen müvekkil'}'
-              '${p.dueDate != null ? ' · Vade: ${DateFormatters.formatDate(p.dueDate!)}' : ''}'),
+              '${due != null ? ' · Vade: ${DateFormatters.formatDate(due)}' : ''}'),
+          isThreeLine: false,
           trailing: StatusChip(
-            label: EnumLabels.paymentStatus(p.status),
-            color: EnumLabels.paymentStatusColor(p.status),
+            label: statusText,
+            color: EnumLabels.paymentStatusColor(p.effectiveStatus),
           ),
           onTap: () async {
             await Navigator.of(context).push(MaterialPageRoute(

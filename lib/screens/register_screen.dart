@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
 import '../utils/validators.dart';
+import '../widgets/password_field.dart';
 
 /// Kayıt ekranı. Başarılı kayıtta [AuthGate] otomatik olarak kök ekrana
 /// geçer, bu yüzden burada ayrıca yönlendirme yapılmaz.
@@ -84,18 +85,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     validator: Validators.requiredEmail,
                   ),
                   const SizedBox(height: 12),
-                  TextFormField(
+                  PasswordField(
                     controller: _passwordCtrl,
-                    decoration: const InputDecoration(labelText: 'Şifre'),
-                    obscureText: true,
+                    labelText: 'Şifre',
                     validator: Validators.requiredPassword,
                   ),
                   const SizedBox(height: 12),
-                  TextFormField(
+                  PasswordField(
                     controller: _confirmPasswordCtrl,
-                    decoration:
-                        const InputDecoration(labelText: 'Şifre (Tekrar)'),
-                    obscureText: true,
+                    labelText: 'Şifre (Tekrar)',
                     validator: (v) {
                       if (v == null || v.isEmpty) {
                         return 'Şifre tekrarı zorunludur.';

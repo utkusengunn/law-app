@@ -12,8 +12,10 @@ import '../services/hearing_service.dart';
 import '../services/meeting_service.dart';
 import '../services/payment_service.dart';
 import '../services/task_service.dart';
+import '../services/auth_service.dart';
 import '../utils/date_formatters.dart';
 import '../utils/event_style.dart';
+import '../utils/sign_out_helper.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/event_tile.dart';
 import '../widgets/quick_action_button.dart';
@@ -56,23 +58,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final upcoming = _buildAgendaItems(days: 7, excludeToday: true);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Avukat Asistan'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.payments_outlined),
-            tooltip: 'Tüm Ödemeler',
-            onPressed: () => _push(const PaymentsListScreen()),
-          ),
-          IconButton(
-            icon: const Icon(Icons.person_outline),
-            tooltip: 'Profilim',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ProfileScreen()),
-            ),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Avukat Asistan')),
+      drawer: _buildDrawer(context),
       body: RefreshIndicator(
         onRefresh: () async => _refresh(),
         child: ListView(
@@ -94,6 +81,90 @@ class _HomeScreenState extends State<HomeScreen> {
                     message: 'Önümüzdeki 7 gün için planlanmış bir kayıt yok.',
                     icon: Icons.event_available_outlined)
                 : Column(children: upcoming),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Ana sayfanın üst kısmındaki eski ikonların taşındığı sade hamburger
+  /// menü: profil, ödemeler ve çıkış yap buraya toplanır, dashboard günlük
+  /// işlere odaklanır (md.4).
+  Widget _buildDrawer(BuildContext context) {
+    final user = AuthService().currentUser;
+    return Drawer(
+      child: SafeArea(
+        child: Column(
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor:
+                        Theme.of(context).colorScheme.onPrimary.withOpacity(0.15),
+                    child: Icon(Icons.gavel,
+                        color: Theme.of(context).colorScheme.onPrimary),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    user?.displayName?.isNotEmpty == true
+                        ? user!.displayName!
+                        : 'Avukat Asistan',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(color: Theme.of(context).colorScheme.onPrimary),
+                  ),
+                  if (user?.email != null)
+                    Text(
+                      user!.email!,
+                      style: TextStyle(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onPrimary
+                              .withOpacity(0.8),
+                          fontSize: 12),
+                    ),
+                ],
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.person_outline),
+              title: const Text('Profilim'),
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.payments_outlined),
+              title: const Text('Tüm Ödemeler'),
+              onTap: () {
+                Navigator.of(context).pop();
+                _push(const PaymentsListScreen());
+              },
+            ),
+            const Spacer(),
+            const Divider(height: 1),
+            ListTile(
+              leading: Icon(Icons.logout, color: Theme.of(context).colorScheme.error),
+              title: Text('Çıkış Yap',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              onTap: () {
+                Navigator.of(context).pop();
+                SignOutHelper.confirmAndSignOut(context,
+                    authService: AuthService());
+              },
+            ),
+            const SizedBox(height: 8),
           ],
         ),
       ),
@@ -279,15 +350,20 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     for (final Payment p in _paymentService.getAll()) {
-      if (p.status != PaymentStatus.waiting && p.status != PaymentStatus.partial) {
+      final effective = p.effectiveStatus;
+      if (effective != PaymentStatus.waiting &&
+          effective != PaymentStatus.partial &&
+          effective != PaymentStatus.overdue) {
         continue;
       }
-      if (p.dueDate == null || !inRange(p.dueDate!)) continue;
+      final due = p.effectiveDueDate;
+      if (due == null || !inRange(due)) continue;
       items.add(_AgendaEntry(
-        date: p.dueDate!,
+        date: due,
         type: AppEventType.payment,
-        title: '${p.paymentType} · ${p.amount.toStringAsFixed(2)} ${p.currency}',
-        subtitle: 'Vade: ${DateFormatters.formatDate(p.dueDate!)}',
+        title:
+            '${p.paymentType} · Kalan ${p.remainingAmount.toStringAsFixed(2)} ${p.currency}',
+        subtitle: 'Vade: ${DateFormatters.formatDate(due)}',
         onTap: () => _push(ClientDetailScreen(clientId: p.clientId)),
       ));
     }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
 import '../services/profile_service.dart';
+import '../utils/sign_out_helper.dart';
 import '../utils/validators.dart';
 import '../widgets/error_state.dart';
 import '../widgets/loading_state.dart';
@@ -102,35 +103,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _confirmSignOut() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Çıkış Yap'),
-        content: const Text('Çıkış yapmak istediğinize emin misiniz?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Vazgeç'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Evet'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    try {
-      await _authService.signOut();
-      // AuthGate, oturum kapandığında otomatik olarak giriş ekranına döner.
-    } on AuthFailure catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(e.message)));
-      }
-    }
-  }
+  Future<void> _confirmSignOut() =>
+      SignOutHelper.confirmAndSignOut(context, authService: _authService);
 
   @override
   Widget build(BuildContext context) {

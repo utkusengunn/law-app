@@ -357,8 +357,8 @@ class _CaseDetailScreenState extends State<CaseDetailScreen>
 
   Widget _buildPaymentsTab(CaseFile caseFile) {
     final payments = _paymentService.getByCase(caseFile.id)
-      ..sort((a, b) =>
-          (b.dueDate ?? b.createdAt).compareTo(a.dueDate ?? a.createdAt));
+      ..sort((a, b) => (b.effectiveDueDate ?? b.createdAt)
+          .compareTo(a.effectiveDueDate ?? a.createdAt));
     return Column(
       children: [
         _addButton('Ödeme Ekle', () async {
@@ -375,16 +375,17 @@ class _CaseDetailScreenState extends State<CaseDetailScreen>
                   itemCount: payments.length,
                   itemBuilder: (context, i) {
                     final p = payments[i];
+                    final due = p.effectiveDueDate;
                     return ListTile(
                       leading: const Icon(Icons.payments_outlined),
                       title: Text(
                           '${p.paymentType} · ${p.amount.toStringAsFixed(2)} ${p.currency}'),
-                      subtitle: Text(p.dueDate != null
-                          ? 'Vade: ${DateFormatters.formatDate(p.dueDate!)}'
-                          : 'Vade tarihi yok'),
+                      subtitle: Text(
+                          '${due != null ? 'Vade: ${DateFormatters.formatDate(due)}' : 'Vade tarihi yok'}'
+                          '${p.totalCollected > 0 && !p.isFullyPaid ? ' · Kalan: ${p.remainingAmount.toStringAsFixed(2)} ${p.currency}' : ''}'),
                       trailing: StatusChip(
-                        label: EnumLabels.paymentStatus(p.status),
-                        color: EnumLabels.paymentStatusColor(p.status),
+                        label: EnumLabels.paymentStatus(p.effectiveStatus),
+                        color: EnumLabels.paymentStatusColor(p.effectiveStatus),
                       ),
                       onTap: () async {
                         await Navigator.of(context).push(MaterialPageRoute(

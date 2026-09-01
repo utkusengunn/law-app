@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
 import '../utils/validators.dart';
+import '../widgets/password_field.dart';
 import 'forgot_password_screen.dart';
 import 'register_screen.dart';
 
@@ -84,10 +85,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     validator: Validators.requiredEmail,
                   ),
                   const SizedBox(height: 12),
-                  TextFormField(
+                  PasswordField(
                     controller: _passwordCtrl,
-                    decoration: const InputDecoration(labelText: 'Şifre'),
-                    obscureText: true,
+                    labelText: 'Şifre',
                     autofillHints: const [AutofillHints.password],
                     validator: (v) => Validators.requiredField(v, fieldName: 'Şifre'),
                   ),

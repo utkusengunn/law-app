@@ -178,13 +178,13 @@ class EnumLabels {
   static String paymentStatus(PaymentStatus s) {
     switch (s) {
       case PaymentStatus.waiting:
-        return 'Bekliyor';
+        return 'Ödenmedi';
       case PaymentStatus.partial:
-        return 'Kısmi Ödendi';
+        return 'Kısmen Ödendi';
       case PaymentStatus.paid:
         return 'Ödendi';
       case PaymentStatus.overdue:
-        return 'Gecikti';
+        return 'Gecikmiş';
       case PaymentStatus.cancelled:
         return 'İptal';
     }
