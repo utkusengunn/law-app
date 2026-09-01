@@ -87,6 +87,15 @@ jobs:
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           echo "$KEYSTORE_BASE64" | base64 -d > android/app/release-keystore.jks
+          echo "----- keystore dosya boyutu (bayt) -----"
+          wc -c < android/app/release-keystore.jks
+          echo "----- keystore + şifre doğrulaması (hızlı test) -----"
+          if ! keytool -list -keystore android/app/release-keystore.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > /dev/null 2>&1; then
+            echo "HATA: keystore/şifre/alias uyuşmuyor. GitHub Secrets'taki ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD veya ANDROID_KEY_ALIAS değerlerinden biri yanlış kopyalanmış olabilir."
+            keytool -list -keystore android/app/release-keystore.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" || true
+            exit 1
+          fi
+          echo "OK: keystore ve şifre eşleşiyor."
           cat > android/key.properties << EOF
           storePassword=$KEYSTORE_PASSWORD
           keyPassword=$KEY_PASSWORD
