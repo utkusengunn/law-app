@@ -59,14 +59,21 @@ jobs:
             APPGRADLE=android/app/build.gradle.kts
             sed -i '/dev.flutter.flutter-gradle-plugin/a\    id("com.google.gms.google-services")' "$APPGRADLE"
             sed -i -E 's/minSdk[[:space:]]*=[[:space:]]*flutter\.minSdkVersion/minSdk = 23/' "$APPGRADLE"
+            # `flutter create --project-name=law_app --org=com.utkusengun` bakes
+            # applicationId "com.utkusengun.law_app" (with the underscore) - but
+            # the Firebase project (and google-services.json) was registered
+            # for "com.utkusengun.lawapp" (no underscore). Force it to match.
+            sed -i -E 's/applicationId[[:space:]]*=[[:space:]]*"com\.utkusengun\.law_app"/applicationId = "com.utkusengun.lawapp"/' "$APPGRADLE"
           elif [ -f android/app/build.gradle ]; then
             APPGRADLE=android/app/build.gradle
             sed -i '/dev.flutter.flutter-gradle-plugin/a\    id "com.google.gms.google-services"' "$APPGRADLE"
             sed -i -E 's/minSdk(Version)?[[:space:]]*=?[[:space:]]*flutter\.minSdkVersion/minSdk = 23/' "$APPGRADLE"
+            sed -i -E 's/applicationId[[:space:]]*=?[[:space:]]*"com\.utkusengun\.law_app"/applicationId "com.utkusengun.lawapp"/' "$APPGRADLE"
           else
             echo "HATA: ne app/build.gradle ne de app/build.gradle.kts bulundu."
             exit 1
           fi
+          echo "----- $APPGRADLE applicationId satırı -----"; grep -n applicationId "$APPGRADLE"
 
           echo "IS_KTS=$([ -f android/app/build.gradle.kts ] && echo true || echo false)" >> "$GITHUB_ENV"
           echo "----- $SETTINGS -----"; cat "$SETTINGS"
