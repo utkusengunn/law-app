@@ -23,6 +23,26 @@ class Validators {
     return null;
   }
 
+  static String? requiredEmail(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'E-posta zorunludur.';
+    }
+    if (!_emailRegex.hasMatch(value.trim())) {
+      return 'Geçerli bir e-posta adresi giriniz.';
+    }
+    return null;
+  }
+
+  static String? requiredPassword(String? value, {int minLength = 6}) {
+    if (value == null || value.isEmpty) {
+      return 'Şifre zorunludur.';
+    }
+    if (value.length < minLength) {
+      return 'Şifre en az $minLength karakter olmalıdır.';
+    }
+    return null;
+  }
+
   static String? phone(String? value) {
     if (value == null || value.trim().isEmpty) {
       return 'Telefon numarası zorunludur.';

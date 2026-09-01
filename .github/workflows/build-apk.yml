@@ -29,6 +29,55 @@ jobs:
           cp -r /tmp/scaffold/android android
           sed -i 's/android:label="law_app"/android:label="Avukat Asistan"/' android/app/src/main/AndroidManifest.xml
 
+      - name: Apply Firebase configuration to the fresh scaffold
+        run: |
+          cp firebase/google-services.json android/app/google-services.json
+          sed -i '/org.jetbrains.kotlin.android/a\    id "com.google.gms.google-services" version "4.4.2" apply false' android/settings.gradle
+          sed -i '/dev.flutter.flutter-gradle-plugin/a\    id "com.google.gms.google-services"' android/app/build.gradle
+          sed -i -E 's/minSdk(Version)?[[:space:]]*=?[[:space:]]*flutter\.minSdkVersion/minSdk = 23/' android/app/build.gradle
+          echo "----- settings.gradle -----"; cat android/settings.gradle
+          echo "----- app/build.gradle -----"; cat android/app/build.gradle
+
+      - name: Configure consistent release signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/release-keystore.jks
+          cat > android/key.properties << EOF
+          storePassword=$KEYSTORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
+          storeFile=release-keystore.jks
+          EOF
+          # Load key.properties. This must go AFTER the plugins {} block (Gradle
+          # requires plugins {} to be the very first block in the file), so we
+          # insert right after its closing brace - the first standalone "}"
+          # line in a freshly generated build.gradle.
+          sed -i '0,/^}/{/^}/a\
+          def keystoreProperties = new Properties()\
+          def keystorePropertiesFile = rootProject.file("key.properties")\
+          if (keystorePropertiesFile.exists()) {\
+              keystoreProperties.load(new FileInputStream(keystorePropertiesFile))\
+          }
+          }' android/app/build.gradle
+          sed -i '/^android {/a\
+              signingConfigs {\
+                  release {\
+                      keyAlias keystoreProperties["keyAlias"]\
+                      keyPassword keystoreProperties["keyPassword"]\
+                      storeFile keystoreProperties["storeFile"] ? file(keystoreProperties["storeFile"]) : null\
+                      storePassword keystoreProperties["storePassword"]\
+                  }\
+              }' android/app/build.gradle
+          # The default template points the release buildType at the debug
+          # signing config (so `flutter run --release` works out of the box) -
+          # point it at our real release config instead.
+          sed -i 's/signingConfig signingConfigs.debug/signingConfig signingConfigs.release/' android/app/build.gradle
+          echo "----- app/build.gradle (after signing patch) -----"; cat android/app/build.gradle
+
       - name: Install dependencies
         run: flutter pub get
 

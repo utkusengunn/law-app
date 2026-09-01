@@ -27,6 +27,7 @@ import 'hearing_form_screen.dart';
 import 'meeting_form_screen.dart';
 import 'payment_form_screen.dart';
 import 'payments_list_screen.dart';
+import 'profile_screen.dart';
 import 'task_form_screen.dart';
 
 /// Dashboard: "Bugün" ve "Yaklaşanlar" bölümleri + hızlı ekleme aksiyonları.
@@ -62,6 +63,13 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.payments_outlined),
             tooltip: 'Tüm Ödemeler',
             onPressed: () => _push(const PaymentsListScreen()),
+          ),
+          IconButton(
+            icon: const Icon(Icons.person_outline),
+            tooltip: 'Profilim',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ProfileScreen()),
+            ),
           ),
         ],
       ),
