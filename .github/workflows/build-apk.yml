@@ -87,15 +87,26 @@ jobs:
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           echo "$KEYSTORE_BASE64" | base64 -d > android/app/release-keystore.jks
-          echo "----- keystore dosya boyutu (bayt) -----"
+          echo "----- keystore dosya boyutu (bayt, 2794 olmalı) -----"
           wc -c < android/app/release-keystore.jks
-          echo "----- keystore + şifre doğrulaması (hızlı test) -----"
-          if ! keytool -list -keystore android/app/release-keystore.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" > /dev/null 2>&1; then
-            echo "HATA: keystore/şifre/alias uyuşmuyor. GitHub Secrets'taki ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD veya ANDROID_KEY_ALIAS değerlerinden biri yanlış kopyalanmış olabilir."
-            keytool -list -keystore android/app/release-keystore.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" || true
+
+          # Gerçek doğrulama: keytool -list yalnızca STORE şifresini kontrol
+          # eder, KEY şifresini hiç dokunmaz - onu daha önce yanlışlıkla yeterli
+          # sandık ve build yine de patladı. -importkeystore hem store hem key
+          # şifresini gerçekten decrypt ederek dener, tam olarak Gradle'ın
+          # paketleme sırasında yaptığının aynısı - bu yüzden asıl güvenilir test bu.
+          echo "----- keystore + store/key şifre doğrulaması (gerçek decrypt testi) -----"
+          if ! keytool -importkeystore \
+              -srckeystore android/app/release-keystore.jks -srcstorepass "$KEYSTORE_PASSWORD" -srcalias "$KEY_ALIAS" -srckeypass "$KEY_PASSWORD" \
+              -destkeystore /tmp/verify.jks -deststorepass verify123456 -destkeypass verify123456 -destalias "$KEY_ALIAS" \
+              -noprompt > /tmp/verify.log 2>&1; then
+            echo "HATA: keystore/şifreler/alias uyuşmuyor. Aşağıdaki gerçek hatayı oku:"
+            cat /tmp/verify.log
+            echo ""
+            echo "Kontrol et: GitHub Secrets'taki ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD değerlerinden biri eksik/yanlış kopyalanmış olabilir."
             exit 1
           fi
-          echo "OK: keystore ve şifre eşleşiyor."
+          echo "OK: keystore, store şifresi VE key şifresi doğrulandı (gerçek decrypt testiyle)."
           cat > android/key.properties << EOF
           storePassword=$KEYSTORE_PASSWORD
           keyPassword=$KEY_PASSWORD
