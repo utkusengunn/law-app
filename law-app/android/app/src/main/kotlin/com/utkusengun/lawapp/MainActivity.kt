@@ -1,0 +1,5 @@
+package com.utkusengun.lawapp
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity : FlutterActivity()

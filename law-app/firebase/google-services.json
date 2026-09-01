@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "790173279451",
+    "project_id": "law-app-40486",
+    "storage_bucket": "law-app-40486.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:790173279451:android:88a3ca7d3af7e6c491d8fe",
+        "android_client_info": {
+          "package_name": "com.utkusengun.lawapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCGcuwJ_C_guzFtUoWSr1a2-dLMNrvgvII"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
