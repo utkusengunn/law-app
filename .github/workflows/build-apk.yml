@@ -22,21 +22,15 @@ jobs:
         with:
           channel: stable
 
+      - name: Generate a fresh Android scaffold matching this Flutter version
+        run: |
+          flutter create --platforms=android --project-name=law_app --org=com.utkusengun /tmp/scaffold
+          rm -rf android
+          cp -r /tmp/scaffold/android android
+          sed -i 's/android:label="law_app"/android:label="Avukat Asistan"/' android/app/src/main/AndroidManifest.xml
+
       - name: Install dependencies
         run: flutter pub get
-
-      - name: Install Gradle 8.4 (used only to generate the wrapper)
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.4'
-
-      - name: Generate Gradle wrapper (if missing)
-        working-directory: android
-        run: |
-          if [ ! -f gradlew ]; then
-            gradle wrapper --gradle-version 8.4 --distribution-type all
-          fi
-          chmod +x gradlew || true
 
       - name: Build release APK
         run: flutter build apk --release
