@@ -89,14 +89,18 @@ jobs:
 
           if [ "$IS_KTS" = "true" ]; then
             APPGRADLE=android/app/build.gradle.kts
-            # Load key.properties. Must go AFTER the plugins {} block (Gradle
-            # requires plugins {} to be the very first block), so insert right
-            # after its closing brace - the first standalone "}" line.
+            # Imports are allowed before the plugins {} block (Gradle's only
+            # rule is that plugins {} must be the FIRST block, not the first
+            # line), so put ours at the very top of the file.
+            sed -i '1i import java.util.Properties\nimport java.io.FileInputStream' "$APPGRADLE"
+            # Load key.properties. The loading code itself must go AFTER the
+            # plugins {} block, so insert right after its closing brace - the
+            # first standalone "}" line following our two new import lines.
             sed -i '0,/^}/{/^}/a\
-          val keystoreProperties = java.util.Properties()\
+          val keystoreProperties = Properties()\
           val keystorePropertiesFile = rootProject.file("key.properties")\
           if (keystorePropertiesFile.exists()) {\
-              keystoreProperties.load(java.io.FileInputStream(keystorePropertiesFile))\
+              keystoreProperties.load(FileInputStream(keystorePropertiesFile))\
           }
           }' "$APPGRADLE"
             sed -i '/^android {/a\
@@ -104,7 +108,7 @@ jobs:
                   create("release") {\
                       keyAlias = keystoreProperties.getProperty("keyAlias")\
                       keyPassword = keystoreProperties.getProperty("keyPassword")\
-                      storeFile = keystoreProperties.getProperty("storeFile")?.let { file(it) }\
+                      storeFile = file(keystoreProperties.getProperty("storeFile"))\
                       storePassword = keystoreProperties.getProperty("storePassword")\
                   }\
               }' "$APPGRADLE"
