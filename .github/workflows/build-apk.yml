@@ -27,16 +27,50 @@ jobs:
           flutter create --platforms=android --project-name=law_app --org=com.utkusengun /tmp/scaffold
           rm -rf android
           cp -r /tmp/scaffold/android android
-          sed -i 's/android:label="law_app"/android:label="Avukat Asistan"/' android/app/src/main/AndroidManifest.xml
+          echo "===== android/ tree (diagnostic) ====="
+          find android -maxdepth 4 -type f | sort
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          if [ -f "$MANIFEST" ]; then
+            sed -i 's/android:label="law_app"/android:label="Avukat Asistan"/' "$MANIFEST"
+          else
+            echo "UYARI: $MANIFEST bulunamadı, label değiştirilemedi."
+          fi
 
       - name: Apply Firebase configuration to the fresh scaffold
         run: |
           cp firebase/google-services.json android/app/google-services.json
-          sed -i '/org.jetbrains.kotlin.android/a\    id "com.google.gms.google-services" version "4.4.2" apply false' android/settings.gradle
-          sed -i '/dev.flutter.flutter-gradle-plugin/a\    id "com.google.gms.google-services"' android/app/build.gradle
-          sed -i -E 's/minSdk(Version)?[[:space:]]*=?[[:space:]]*flutter\.minSdkVersion/minSdk = 23/' android/app/build.gradle
-          echo "----- settings.gradle -----"; cat android/settings.gradle
-          echo "----- app/build.gradle -----"; cat android/app/build.gradle
+
+          if [ -f android/settings.gradle.kts ]; then
+            echo "Tespit: Kotlin DSL (settings.gradle.kts) kullanılıyor."
+            SETTINGS=android/settings.gradle.kts
+            sed -i '/org.jetbrains.kotlin.android/a\    id("com.google.gms.google-services") version "4.4.2" apply false' "$SETTINGS"
+          elif [ -f android/settings.gradle ]; then
+            echo "Tespit: Groovy DSL (settings.gradle) kullanılıyor."
+            SETTINGS=android/settings.gradle
+            sed -i '/org.jetbrains.kotlin.android/a\    id "com.google.gms.google-services" version "4.4.2" apply false' "$SETTINGS"
+          else
+            echo "HATA: ne settings.gradle ne de settings.gradle.kts bulundu."
+            echo "===== android/ tam liste ====="
+            find android -type f | sort
+            exit 1
+          fi
+
+          if [ -f android/app/build.gradle.kts ]; then
+            APPGRADLE=android/app/build.gradle.kts
+            sed -i '/dev.flutter.flutter-gradle-plugin/a\    id("com.google.gms.google-services")' "$APPGRADLE"
+            sed -i -E 's/minSdk[[:space:]]*=[[:space:]]*flutter\.minSdkVersion/minSdk = 23/' "$APPGRADLE"
+          elif [ -f android/app/build.gradle ]; then
+            APPGRADLE=android/app/build.gradle
+            sed -i '/dev.flutter.flutter-gradle-plugin/a\    id "com.google.gms.google-services"' "$APPGRADLE"
+            sed -i -E 's/minSdk(Version)?[[:space:]]*=?[[:space:]]*flutter\.minSdkVersion/minSdk = 23/' "$APPGRADLE"
+          else
+            echo "HATA: ne app/build.gradle ne de app/build.gradle.kts bulundu."
+            exit 1
+          fi
+
+          echo "IS_KTS=$([ -f android/app/build.gradle.kts ] && echo true || echo false)" >> "$GITHUB_ENV"
+          echo "----- $SETTINGS -----"; cat "$SETTINGS"
+          echo "----- $APPGRADLE -----"; cat "$APPGRADLE"
 
       - name: Configure consistent release signing
         env:
@@ -52,18 +86,39 @@ jobs:
           keyAlias=$KEY_ALIAS
           storeFile=release-keystore.jks
           EOF
-          # Load key.properties. This must go AFTER the plugins {} block (Gradle
-          # requires plugins {} to be the very first block in the file), so we
-          # insert right after its closing brace - the first standalone "}"
-          # line in a freshly generated build.gradle.
-          sed -i '0,/^}/{/^}/a\
+
+          if [ "$IS_KTS" = "true" ]; then
+            APPGRADLE=android/app/build.gradle.kts
+            # Load key.properties. Must go AFTER the plugins {} block (Gradle
+            # requires plugins {} to be the very first block), so insert right
+            # after its closing brace - the first standalone "}" line.
+            sed -i '0,/^}/{/^}/a\
+          val keystoreProperties = java.util.Properties()\
+          val keystorePropertiesFile = rootProject.file("key.properties")\
+          if (keystorePropertiesFile.exists()) {\
+              keystoreProperties.load(java.io.FileInputStream(keystorePropertiesFile))\
+          }
+          }' "$APPGRADLE"
+            sed -i '/^android {/a\
+              signingConfigs {\
+                  create("release") {\
+                      keyAlias = keystoreProperties.getProperty("keyAlias")\
+                      keyPassword = keystoreProperties.getProperty("keyPassword")\
+                      storeFile = keystoreProperties.getProperty("storeFile")?.let { file(it) }\
+                      storePassword = keystoreProperties.getProperty("storePassword")\
+                  }\
+              }' "$APPGRADLE"
+            sed -i 's/signingConfig = signingConfigs.getByName("debug")/signingConfig = signingConfigs.getByName("release")/' "$APPGRADLE"
+          else
+            APPGRADLE=android/app/build.gradle
+            sed -i '0,/^}/{/^}/a\
           def keystoreProperties = new Properties()\
           def keystorePropertiesFile = rootProject.file("key.properties")\
           if (keystorePropertiesFile.exists()) {\
               keystoreProperties.load(new FileInputStream(keystorePropertiesFile))\
           }
-          }' android/app/build.gradle
-          sed -i '/^android {/a\
+          }' "$APPGRADLE"
+            sed -i '/^android {/a\
               signingConfigs {\
                   release {\
                       keyAlias keystoreProperties["keyAlias"]\
@@ -71,12 +126,10 @@ jobs:
                       storeFile keystoreProperties["storeFile"] ? file(keystoreProperties["storeFile"]) : null\
                       storePassword keystoreProperties["storePassword"]\
                   }\
-              }' android/app/build.gradle
-          # The default template points the release buildType at the debug
-          # signing config (so `flutter run --release` works out of the box) -
-          # point it at our real release config instead.
-          sed -i 's/signingConfig signingConfigs.debug/signingConfig signingConfigs.release/' android/app/build.gradle
-          echo "----- app/build.gradle (after signing patch) -----"; cat android/app/build.gradle
+              }' "$APPGRADLE"
+            sed -i 's/signingConfig signingConfigs.debug/signingConfig signingConfigs.release/' "$APPGRADLE"
+          fi
+          echo "----- $APPGRADLE (after signing patch) -----"; cat "$APPGRADLE"
 
       - name: Install dependencies
         run: flutter pub get
