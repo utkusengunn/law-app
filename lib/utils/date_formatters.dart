@@ -10,6 +10,7 @@ class DateFormatters {
   static final DateFormat _time = DateFormat('HH:mm', 'tr_TR');
   static final DateFormat _dayMonthLong = DateFormat('d MMMM yyyy', 'tr_TR');
   static final DateFormat _weekdayDayMonth = DateFormat('EEEE, d MMMM', 'tr_TR');
+  static final DateFormat _dayMonth = DateFormat('d MMMM', 'tr_TR');
 
   static String formatDate(DateTime date) => _dayMonthYear.format(date);
 
@@ -20,6 +21,10 @@ class DateFormatters {
   static String formatDateLong(DateTime date) => _dayMonthLong.format(date);
 
   static String formatWeekdayDate(DateTime date) => _weekdayDayMonth.format(date);
+
+  /// "12 Eylül" gibi yıl olmadan gün+ay - ana sayfadaki "Yaklaşanlar" kartları
+  /// için (yıl bilgisi bu bağlamda gereksiz kalabalık yaratır).
+  static String formatDayMonth(DateTime date) => _dayMonth.format(date);
 
   /// İki tarihin takvim günü olarak aynı olup olmadığını kontrol eder.
   static bool isSameDay(DateTime a, DateTime b) {

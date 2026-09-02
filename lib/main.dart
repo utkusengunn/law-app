@@ -19,7 +19,8 @@ class AvukatAsistanApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const seedColor = Color(0xFF12294F); // koyu lacivert - hukuk teması
+    // Kahverengi/bej ana renk paleti - kurumsal, sade, göz yormayan.
+    const seedColor = Color(0xFF4E342E); // koyu kahverengi
 
     final lightScheme = ColorScheme.fromSeed(
       seedColor: seedColor,
@@ -39,7 +40,7 @@ class AvukatAsistanApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: lightScheme,
-        scaffoldBackgroundColor: const Color(0xFFF6F7FA),
+        scaffoldBackgroundColor: const Color(0xFFF8F4EF), // krem/bej zemin
         appBarTheme: AppBarTheme(
           backgroundColor: lightScheme.primary,
           foregroundColor: lightScheme.onPrimary,
@@ -61,17 +62,17 @@ class AvukatAsistanApp extends StatelessWidget {
           margin: const EdgeInsets.symmetric(vertical: 4),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: Colors.grey.shade200),
+            side: BorderSide(color: Colors.brown.shade100),
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.grey.shade300),
+            borderSide: BorderSide(color: Colors.brown.shade200),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.grey.shade300),
+            borderSide: BorderSide(color: Colors.brown.shade200),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
@@ -106,7 +107,7 @@ class AvukatAsistanApp extends StatelessWidget {
         chipTheme: ChipThemeData(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(999),
-            side: BorderSide(color: Colors.grey.shade300),
+            side: BorderSide(color: Colors.brown.shade200),
           ),
           backgroundColor: Colors.white,
           selectedColor: lightScheme.primaryContainer,
@@ -118,7 +119,7 @@ class AvukatAsistanApp extends StatelessWidget {
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
-        dividerTheme: DividerThemeData(color: Colors.grey.shade200, thickness: 1),
+        dividerTheme: DividerThemeData(color: Colors.brown.shade100, thickness: 1),
         listTileTheme: const ListTileThemeData(
           contentPadding: EdgeInsets.symmetric(horizontal: 4),
         ),

@@ -24,17 +24,19 @@ class EventStyle {
   }
 
   static Color colorFor(AppEventType type) {
+    // Kahverengi/bej ana paletle uyumlu, tonu düşürülmüş ("aşırı renkli
+    // olmayan") ama birbirinden net ayrışan vurgu renkleri.
     switch (type) {
       case AppEventType.hearing:
-        return const Color(0xFFB3261E); // koyu kırmızı
+        return const Color(0xFFA1483A); // kiremit/terracotta
       case AppEventType.meeting:
-        return const Color(0xFF0B6E4F); // yeşil
+        return const Color(0xFF4B6B3A); // zeytin yeşili
       case AppEventType.deadline:
-        return const Color(0xFFB4720A); // turuncu/amber
+        return const Color(0xFFB07A2E); // okr/amber
       case AppEventType.task:
-        return const Color(0xFF3F51B5); // indigo
+        return const Color(0xFF3F5B58); // koyu çamurumsu teal
       case AppEventType.payment:
-        return const Color(0xFF6A1B9A); // mor
+        return const Color(0xFF7B3F61); // koyu bordo/eflatun
     }
   }
 

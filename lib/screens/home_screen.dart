@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/case_file.dart';
 import '../models/deadline.dart';
 import '../models/hearing.dart';
 import '../models/legal_task.dart';
@@ -12,13 +13,10 @@ import '../services/hearing_service.dart';
 import '../services/meeting_service.dart';
 import '../services/payment_service.dart';
 import '../services/task_service.dart';
-import '../services/auth_service.dart';
 import '../utils/date_formatters.dart';
 import '../utils/event_style.dart';
-import '../utils/sign_out_helper.dart';
+import '../widgets/agenda_card.dart';
 import '../widgets/empty_state.dart';
-import '../widgets/event_tile.dart';
-import '../widgets/quick_action_button.dart';
 import '../widgets/section_header.dart';
 import 'case_detail_screen.dart';
 import 'case_form_screen.dart';
@@ -32,8 +30,9 @@ import 'payments_list_screen.dart';
 import 'profile_screen.dart';
 import 'task_form_screen.dart';
 
-/// Dashboard: "Bugün" ve "Yaklaşanlar" bölümleri + hızlı ekleme aksiyonları.
-/// Bu ekran bir rapor değil, günlük hızlı kontrol merkezidir; sade tutulur.
+/// Dashboard: "Bugün ne var, yakında ne olacak?" sorusuna hızlı cevap veren
+/// ekran. Ekleme işlemleri (Müvekkil/Dosya/Süre/Duruşma/Görüşme/İş/Ödeme)
+/// hamburger menüde toplanır; ana sayfa bir navigasyon ekranı gibi görünmez.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -54,18 +53,33 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final today = _buildAgendaItems(days: 0);
-    final upcoming = _buildAgendaItems(days: 7, excludeToday: true);
+    final today = _buildAgendaCards(days: 0);
+    final upcoming = _buildAgendaCards(days: 7, excludeToday: true);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Avukat Asistan')),
+      appBar: AppBar(
+        title: const Text('Avukat Asistan'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.person_outline),
+            tooltip: 'Profilim',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ProfileScreen()),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.payments_outlined),
+            tooltip: 'Tüm Ödemeler',
+            onPressed: () => _push(const PaymentsListScreen()),
+          ),
+        ],
+      ),
       drawer: _buildDrawer(context),
       body: RefreshIndicator(
         onRefresh: () async => _refresh(),
         child: ListView(
-          padding: const EdgeInsets.only(bottom: 24),
+          padding: const EdgeInsets.symmetric(vertical: 12),
           children: [
-            _buildQuickActions(),
             SectionHeader(
               title: 'Bugün',
               trailing: Text(DateFormatters.formatWeekdayDate(DateTime.now())),
@@ -75,158 +89,99 @@ class _HomeScreenState extends State<HomeScreen> {
                     message: 'Bugün için planlanmış bir kayıt yok.',
                     icon: Icons.wb_sunny_outlined)
                 : Column(children: today),
+            const SizedBox(height: 8),
             const SectionHeader(title: 'Yaklaşanlar (7 gün)'),
             upcoming.isEmpty
                 ? const EmptyState(
                     message: 'Önümüzdeki 7 gün için planlanmış bir kayıt yok.',
                     icon: Icons.event_available_outlined)
                 : Column(children: upcoming),
+            const SizedBox(height: 16),
           ],
         ),
       ),
     );
   }
 
-  /// Ana sayfanın üst kısmındaki eski ikonların taşındığı sade hamburger
-  /// menü: profil, ödemeler ve çıkış yap buraya toplanır, dashboard günlük
-  /// işlere odaklanır (md.4).
+  /// Ekleme işlemleri: hamburger menüde toplanır ki ana sayfa bir navigasyon
+  /// ekranı gibi görünmesin, sadece "bugün/yakında ne var" sorusuna odaklansın.
+  /// Profilim ve Tüm Ödemeler burada YOK - onlar sağ üstteki ikonlarda kalır.
   Widget _buildDrawer(BuildContext context) {
-    final user = AuthService().currentUser;
     return Drawer(
       child: SafeArea(
-        child: Column(
+        child: ListView(
+          padding: EdgeInsets.zero,
           children: [
             DrawerHeader(
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.primary,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
+              child: Row(
                 children: [
-                  CircleAvatar(
-                    radius: 24,
-                    backgroundColor:
-                        Theme.of(context).colorScheme.onPrimary.withOpacity(0.15),
-                    child: Icon(Icons.gavel,
-                        color: Theme.of(context).colorScheme.onPrimary),
-                  ),
-                  const SizedBox(height: 12),
+                  Icon(Icons.gavel, color: Theme.of(context).colorScheme.onPrimary),
+                  const SizedBox(width: 12),
                   Text(
-                    user?.displayName?.isNotEmpty == true
-                        ? user!.displayName!
-                        : 'Avukat Asistan',
+                    'Avukat Asistan',
                     style: Theme.of(context)
                         .textTheme
                         .titleMedium
                         ?.copyWith(color: Theme.of(context).colorScheme.onPrimary),
                   ),
-                  if (user?.email != null)
-                    Text(
-                      user!.email!,
-                      style: TextStyle(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onPrimary
-                              .withOpacity(0.8),
-                          fontSize: 12),
-                    ),
                 ],
               ),
             ),
             ListTile(
-              leading: const Icon(Icons.person_outline),
-              title: const Text('Profilim'),
-              onTap: () {
-                Navigator.of(context).pop();
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                );
-              },
+              leading: const Icon(Icons.person_add_alt_1_outlined),
+              title: const Text('Müvekkil Ekleme'),
+              onTap: () => _drawerAction(() => _push(const ClientFormScreen())),
+            ),
+            ListTile(
+              leading: const Icon(Icons.create_new_folder_outlined),
+              title: const Text('Dosya Ekleme'),
+              onTap: () => _drawerAction(() => _push(const CaseFormScreen())),
+            ),
+            ListTile(
+              leading: const Icon(Icons.hourglass_empty),
+              title: const Text('Süre'),
+              onTap: () => _drawerAction(() =>
+                  _pickCaseThen((caseId) => DeadlineFormScreen(caseId: caseId))),
+            ),
+            ListTile(
+              leading: const Icon(Icons.gavel),
+              title: const Text('Duruşma'),
+              onTap: () => _drawerAction(() =>
+                  _pickCaseThen((caseId) => HearingFormScreen(caseId: caseId))),
+            ),
+            ListTile(
+              leading: const Icon(Icons.people_alt_outlined),
+              title: const Text('Görüşme'),
+              onTap: () => _drawerAction(() =>
+                  _pickClientThen((clientId) => MeetingFormScreen(clientId: clientId))),
+            ),
+            ListTile(
+              leading: const Icon(Icons.checklist_outlined),
+              title: const Text('İş'),
+              onTap: () => _drawerAction(() => _push(const TaskFormScreen())),
             ),
             ListTile(
               leading: const Icon(Icons.payments_outlined),
-              title: const Text('Tüm Ödemeler'),
-              onTap: () {
-                Navigator.of(context).pop();
-                _push(const PaymentsListScreen());
-              },
+              title: const Text('Ödeme'),
+              onTap: () => _drawerAction(() =>
+                  _pickClientThen((clientId) => PaymentFormScreen(clientId: clientId))),
             ),
-            const Spacer(),
-            const Divider(height: 1),
-            ListTile(
-              leading: Icon(Icons.logout, color: Theme.of(context).colorScheme.error),
-              title: Text('Çıkış Yap',
-                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
-              onTap: () {
-                Navigator.of(context).pop();
-                SignOutHelper.confirmAndSignOut(context,
-                    authService: AuthService());
-              },
-            ),
-            const SizedBox(height: 8),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildQuickActions() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            QuickActionButton(
-              icon: Icons.person_add_alt_1_outlined,
-              label: 'Müvekkil',
-              onTap: () => _push(const ClientFormScreen()),
-            ),
-            const SizedBox(width: 10),
-            QuickActionButton(
-              icon: Icons.create_new_folder_outlined,
-              label: 'Dosya',
-              onTap: () => _push(const CaseFormScreen()),
-            ),
-            const SizedBox(width: 10),
-            QuickActionButton(
-              icon: Icons.hourglass_empty,
-              label: 'Süre',
-              onTap: () => _pickCaseThen((caseId) =>
-                  DeadlineFormScreen(caseId: caseId)),
-            ),
-            const SizedBox(width: 10),
-            QuickActionButton(
-              icon: Icons.gavel,
-              label: 'Duruşma',
-              onTap: () => _pickCaseThen((caseId) =>
-                  HearingFormScreen(caseId: caseId)),
-            ),
-            const SizedBox(width: 10),
-            QuickActionButton(
-              icon: Icons.people_alt_outlined,
-              label: 'Görüşme',
-              onTap: () => _pickClientThen((clientId) =>
-                  MeetingFormScreen(clientId: clientId)),
-            ),
-            const SizedBox(width: 10),
-            QuickActionButton(
-              icon: Icons.checklist_outlined,
-              label: 'İş',
-              onTap: () => _push(const TaskFormScreen()),
-            ),
-            const SizedBox(width: 10),
-            QuickActionButton(
-              icon: Icons.payments_outlined,
-              label: 'Ödeme',
-              onTap: () => _pickClientThen((clientId) =>
-                  PaymentFormScreen(clientId: clientId)),
-            ),
-          ],
-        ),
-      ),
-    );
+  /// Drawer'ı kapatıp asıl aksiyonu bir sonraki frame'de çalıştırır (drawer
+  /// kapanma animasyonuyla yeni sayfanın push'u çakışmasın diye).
+  void _drawerAction(VoidCallback action) {
+    Navigator.of(context).pop();
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (mounted) action();
+    });
   }
 
   Future<void> _push(Widget screen) async {
@@ -286,16 +241,38 @@ class _HomeScreenState extends State<HomeScreen> {
     await _push(builder(clientId));
   }
 
-  /// [days] gün içindeki (bugün dahil) tüm kayıt türlerini tek bir listede
-  /// tarih sırasına göre toplar. [excludeToday] true ise bugünün kayıtları
-  /// hariç tutulur (Yaklaşanlar bölümü için).
-  List<Widget> _buildAgendaItems({required int days, bool excludeToday = false}) {
+  String? _clientNameForCase(String? caseId) {
+    if (caseId == null) return null;
+    final caseFile = _caseService.getById(caseId);
+    if (caseFile == null) return null;
+    return _clientService.getById(caseFile.clientId)?.displayName;
+  }
+
+  CaseFile? _caseFor(String? caseId) =>
+      caseId == null ? null : _caseService.getById(caseId);
+
+  /// [days] gün içindeki (bugün dahil) tüm kayıt türlerini, türü ilk bakışta
+  /// belli eden [AgendaCard] listesi olarak tarih sırasına göre toplar.
+  /// [excludeToday] true ise bugünün kayıtları hariç tutulur (Yaklaşanlar
+  /// bölümü için).
+  List<Widget> _buildAgendaCards({required int days, bool excludeToday = false}) {
     final now = DateTime.now();
+    final isTodaySection = days == 0;
+
     bool inRange(DateTime date) {
       final isToday = DateFormatters.isToday(date, from: now);
       if (excludeToday && isToday) return false;
       if (days == 0) return isToday;
       return DateFormatters.isWithinNextDays(date, days, from: now);
+    }
+
+    String timeLabelFor(DateTime date, {required bool hasTime}) {
+      if (isTodaySection) {
+        return hasTime ? DateFormatters.formatTime(date) : 'Bugün';
+      }
+      return hasTime
+          ? '${DateFormatters.formatDayMonth(date)} · ${DateFormatters.formatTime(date)}'
+          : DateFormatters.formatDayMonth(date);
     }
 
     final items = <_AgendaEntry>[];
@@ -306,8 +283,9 @@ class _HomeScreenState extends State<HomeScreen> {
       items.add(_AgendaEntry(
         date: h.date,
         type: AppEventType.hearing,
-        title: h.hearingType,
-        subtitle: '${DateFormatters.formatDateTime(h.date)} · ${h.court}',
+        timeLabel: timeLabelFor(h.date, hasTime: true),
+        personLine: _clientNameForCase(h.caseId),
+        detailLine: '${h.court} · Dosya: ${h.caseNumber}',
         onTap: () => _push(HearingFormScreen(caseId: h.caseId, hearing: h)),
       ));
     }
@@ -316,11 +294,15 @@ class _HomeScreenState extends State<HomeScreen> {
       if (m.status != MeetingStatus.scheduled) continue;
       if (!inRange(m.date)) continue;
       final client = _clientService.getById(m.clientId);
+      final caseFile = _caseFor(m.caseId);
       items.add(_AgendaEntry(
         date: m.date,
         type: AppEventType.meeting,
-        title: client?.displayName ?? 'Görüşme',
-        subtitle: DateFormatters.formatDateTime(m.date),
+        timeLabel: timeLabelFor(m.date, hasTime: true),
+        personLine: client?.displayName ?? 'Görüşme',
+        detailLine: caseFile != null
+            ? 'Dosya: ${caseFile.caseNumber}'
+            : (m.note != null && m.note!.isNotEmpty ? m.note : null),
         onTap: () => _push(ClientDetailScreen(clientId: m.clientId)),
       ));
     }
@@ -328,11 +310,13 @@ class _HomeScreenState extends State<HomeScreen> {
     for (final LegalTask t in _taskService.getAll()) {
       if (t.status == TaskStatus.done) continue;
       if (t.dueDate == null || !inRange(t.dueDate!)) continue;
+      final caseFile = _caseFor(t.caseId);
       items.add(_AgendaEntry(
         date: t.dueDate!,
         type: AppEventType.task,
-        title: t.title,
-        subtitle: DateFormatters.formatDate(t.dueDate!),
+        timeLabel: timeLabelFor(t.dueDate!, hasTime: false),
+        personLine: t.title,
+        detailLine: caseFile != null ? 'Dosya: ${caseFile.caseNumber}' : null,
         onTap: () => _push(TaskFormScreen(task: t)),
       ));
     }
@@ -340,11 +324,15 @@ class _HomeScreenState extends State<HomeScreen> {
     for (final Deadline d in _deadlineService.getAll()) {
       if (d.status != DeadlineStatus.pending) continue;
       if (!inRange(d.dueDate)) continue;
+      final caseFile = _caseFor(d.caseId);
       items.add(_AgendaEntry(
         date: d.dueDate,
         type: AppEventType.deadline,
-        title: d.title,
-        subtitle: DateFormatters.formatDate(d.dueDate),
+        timeLabel: timeLabelFor(d.dueDate, hasTime: false),
+        personLine: d.title,
+        detailLine: caseFile != null
+            ? 'Dosya: ${caseFile.caseNumber} · Son tarih'
+            : 'Son tarih',
         onTap: () => _push(DeadlineFormScreen(caseId: d.caseId, deadline: d)),
       ));
     }
@@ -358,12 +346,14 @@ class _HomeScreenState extends State<HomeScreen> {
       }
       final due = p.effectiveDueDate;
       if (due == null || !inRange(due)) continue;
+      final client = _clientService.getById(p.clientId);
       items.add(_AgendaEntry(
         date: due,
         type: AppEventType.payment,
-        title:
-            '${p.paymentType} · Kalan ${p.remainingAmount.toStringAsFixed(2)} ${p.currency}',
-        subtitle: 'Vade: ${DateFormatters.formatDate(due)}',
+        timeLabel: timeLabelFor(due, hasTime: false),
+        personLine: client?.displayName ?? 'Bilinmeyen müvekkil',
+        detailLine:
+            'Kalan ${p.remainingAmount.toStringAsFixed(2)} ${p.currency}',
         onTap: () => _push(ClientDetailScreen(clientId: p.clientId)),
       ));
     }
@@ -371,11 +361,11 @@ class _HomeScreenState extends State<HomeScreen> {
     items.sort((a, b) => a.date.compareTo(b.date));
 
     return items
-        .map((e) => EventTile(
-              icon: EventStyle.iconFor(e.type),
-              color: EventStyle.colorFor(e.type),
-              title: e.title,
-              subtitle: e.subtitle,
+        .map((e) => AgendaCard(
+              type: e.type,
+              timeLabel: e.timeLabel,
+              personLine: e.personLine,
+              detailLine: e.detailLine,
               onTap: e.onTap,
             ))
         .toList();
@@ -386,14 +376,16 @@ class _AgendaEntry {
   _AgendaEntry({
     required this.date,
     required this.type,
-    required this.title,
-    required this.subtitle,
+    required this.timeLabel,
     required this.onTap,
+    this.personLine,
+    this.detailLine,
   });
 
   final DateTime date;
   final AppEventType type;
-  final String title;
-  final String subtitle;
+  final String timeLabel;
+  final String? personLine;
+  final String? detailLine;
   final VoidCallback onTap;
 }
