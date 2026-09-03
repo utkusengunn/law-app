@@ -36,6 +36,19 @@ jobs:
             echo "UYARI: $MANIFEST bulunamadı, label değiştirilemedi."
           fi
 
+          # share_plus (v7.2.2) needs compileSdk 34+. Editing the literal
+          # `compileSdk = 35` text in app/build.gradle.kts does NOT work:
+          # Flutter's own "Upgrading build.gradle.kts" step reverts it back
+          # to `flutter.compileSdkVersion` on every `flutter build`, and
+          # share_plus's own Gradle file references that SAME global
+          # `flutter` extension - so both the app and the plugin need the
+          # override at its real source. That source is local.properties:
+          # the FlutterExtension reads flutter.compileSdkVersion/
+          # flutter.targetSdkVersion from there for every subproject.
+          echo "flutter.compileSdkVersion=35" >> android/local.properties
+          echo "flutter.targetSdkVersion=35" >> android/local.properties
+          echo "----- android/local.properties -----"; cat android/local.properties
+
       - name: Apply Firebase configuration to the fresh scaffold
         run: |
           cp firebase/google-services.json android/app/google-services.json
