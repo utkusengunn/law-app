@@ -36,18 +36,18 @@ jobs:
             echo "UYARI: $MANIFEST bulunamadı, label değiştirilemedi."
           fi
 
-          # share_plus (v7.2.2) needs compileSdk 34+. Editing the literal
-          # `compileSdk = 35` text in app/build.gradle.kts does NOT work:
-          # Flutter's own "Upgrading build.gradle.kts" step reverts it back
-          # to `flutter.compileSdkVersion` on every `flutter build`, and
-          # share_plus's own Gradle file references that SAME global
-          # `flutter` extension - so both the app and the plugin need the
-          # override at its real source. That source is local.properties:
-          # the FlutterExtension reads flutter.compileSdkVersion/
-          # flutter.targetSdkVersion from there for every subproject.
-          echo "flutter.compileSdkVersion=35" >> android/local.properties
-          echo "flutter.targetSdkVersion=35" >> android/local.properties
-          echo "----- android/local.properties -----"; cat android/local.properties
+          # share_plus (v7.2.2) needs compileSdk 34+, but its OWN
+          # android/build.gradle (inside the pub cache, not our repo)
+          # hardcodes/resolves compileSdk 33 - editing app/build.gradle.kts
+          # (tried in v0.6.1) or android/local.properties (tried in v0.6.2)
+          # only affects OUR app module, never share_plus's own subproject,
+          # and Flutter's "Upgrading build.gradle.kts" step reverts direct
+          # edits to app/build.gradle.kts anyway. The only override point
+          # that reaches EVERY subproject (app + every plugin, including
+          # share_plus) is the root android/build.gradle(.kts)'s
+          # `subprojects {}` block, applied after each subproject's own
+          # config via afterEvaluate. Appended further down once we know
+          # whether this scaffold is Kotlin DSL or Groovy.
 
       - name: Apply Firebase configuration to the fresh scaffold
         run: |
@@ -100,6 +100,47 @@ jobs:
           echo "IS_KTS=$([ -f android/app/build.gradle.kts ] && echo true || echo false)" >> "$GITHUB_ENV"
           echo "----- $SETTINGS -----"; cat "$SETTINGS"
           echo "----- $APPGRADLE -----"; cat "$APPGRADLE"
+
+          # Force compileSdk 35 on every Android subproject (app AND every
+          # plugin, share_plus included) - see the comment in the previous
+          # step for why this is the only override point that actually
+          # reaches share_plus's own subproject.
+          if [ -f android/build.gradle.kts ]; then
+            # NOTE: com.android.build.gradle.BaseExtension (used in a first
+            # attempt at this fix) was REMOVED in AGP 9.0 - confirmed against
+            # Google's own AGP 9.0 migration notes, which is why this uses
+            # the current replacement (com.android.build.api.dsl.CommonExtension,
+            # which as of AGP 9.0 no longer needs generic type parameters -
+            # also confirmed against that same migration doc's own example).
+            cat >> android/build.gradle.kts << 'EOF'
+
+          subprojects {
+              afterEvaluate {
+                  extensions.findByType(com.android.build.api.dsl.CommonExtension::class.java)?.let { commonExtension ->
+                      commonExtension.compileSdk = 35
+                  }
+              }
+          }
+          EOF
+            echo "----- android/build.gradle.kts (root, after override) -----"; cat android/build.gradle.kts
+          elif [ -f android/build.gradle ]; then
+            cat >> android/build.gradle << 'EOF'
+
+          subprojects {
+              afterEvaluate { proj ->
+                  if (proj.hasProperty('android')) {
+                      proj.android {
+                          compileSdkVersion 35
+                      }
+                  }
+              }
+          }
+          EOF
+            echo "----- android/build.gradle (root, after override) -----"; cat android/build.gradle
+          else
+            echo "HATA: ne android/build.gradle ne de android/build.gradle.kts bulundu."
+            exit 1
+          fi
 
       - name: Configure consistent release signing
         env:
