@@ -59,6 +59,13 @@ jobs:
             APPGRADLE=android/app/build.gradle.kts
             sed -i '/dev.flutter.flutter-gradle-plugin/a\    id("com.google.gms.google-services")' "$APPGRADLE"
             sed -i -E 's/minSdk[[:space:]]*=[[:space:]]*flutter\.minSdkVersion/minSdk = 23/' "$APPGRADLE"
+            # share_plus (v7.2.2) pulls in androidx.window/fragment/activity/
+            # lifecycle versions that require compiling against API 34+.
+            # Flutter's `flutter.compileSdkVersion`/`flutter.targetSdkVersion`
+            # defaults still resolved to 33 here, which failed
+            # `:share_plus:checkReleaseAarMetadata`. Pin both explicitly.
+            sed -i -E 's/compileSdk[[:space:]]*=[[:space:]]*flutter\.compileSdkVersion/compileSdk = 35/' "$APPGRADLE"
+            sed -i -E 's/targetSdk[[:space:]]*=[[:space:]]*flutter\.targetSdkVersion/targetSdk = 35/' "$APPGRADLE"
             # `flutter create --project-name=law_app --org=com.utkusengun` bakes
             # applicationId "com.utkusengun.law_app" (with the underscore) - but
             # the Firebase project (and google-services.json) was registered
@@ -68,6 +75,8 @@ jobs:
             APPGRADLE=android/app/build.gradle
             sed -i '/dev.flutter.flutter-gradle-plugin/a\    id "com.google.gms.google-services"' "$APPGRADLE"
             sed -i -E 's/minSdk(Version)?[[:space:]]*=?[[:space:]]*flutter\.minSdkVersion/minSdk = 23/' "$APPGRADLE"
+            sed -i -E 's/compileSdk(Version)?[[:space:]]*=?[[:space:]]*flutter\.compileSdkVersion/compileSdk = 35/' "$APPGRADLE"
+            sed -i -E 's/targetSdk(Version)?[[:space:]]*=?[[:space:]]*flutter\.targetSdkVersion/targetSdk = 35/' "$APPGRADLE"
             sed -i -E 's/applicationId[[:space:]]*=?[[:space:]]*"com\.utkusengun\.law_app"/applicationId "com.utkusengun.lawapp"/' "$APPGRADLE"
           else
             echo "HATA: ne app/build.gradle ne de app/build.gradle.kts bulundu."
