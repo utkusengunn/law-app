@@ -112,13 +112,28 @@ jobs:
             # the current replacement (com.android.build.api.dsl.CommonExtension,
             # which as of AGP 9.0 no longer needs generic type parameters -
             # also confirmed against that same migration doc's own example).
+            # The scaffold's root build.gradle.kts already contains
+            # `subprojects { project.evaluationDependsOn(":app") }`, which
+            # forces `:app` to fully evaluate immediately - BEFORE our
+            # `subprojects{}` block below gets a chance to register
+            # `afterEvaluate` on it. Calling afterEvaluate on an
+            # already-evaluated project throws "Cannot run
+            # Project.afterEvaluate(Action) when the project is already
+            # evaluated." (hit in v0.6.4, run #20). Guard with
+            # `state.executed`: apply immediately if already evaluated,
+            # otherwise defer to afterEvaluate as before.
             cat >> android/build.gradle.kts << 'EOF'
 
           subprojects {
-              afterEvaluate {
+              val applyCompileSdk35: () -> Unit = {
                   extensions.findByType(com.android.build.api.dsl.CommonExtension::class.java)?.let { commonExtension ->
                       commonExtension.compileSdk = 35
                   }
+              }
+              if (state.executed) {
+                  applyCompileSdk35()
+              } else {
+                  afterEvaluate { applyCompileSdk35() }
               }
           }
           EOF
@@ -126,13 +141,18 @@ jobs:
           elif [ -f android/build.gradle ]; then
             cat >> android/build.gradle << 'EOF'
 
-          subprojects {
-              afterEvaluate { proj ->
-                  if (proj.hasProperty('android')) {
-                      proj.android {
+          subprojects { sub ->
+              def applyCompileSdk35 = {
+                  if (sub.hasProperty('android')) {
+                      sub.android {
                           compileSdkVersion 35
                       }
                   }
+              }
+              if (sub.state.executed) {
+                  applyCompileSdk35()
+              } else {
+                  sub.afterEvaluate { applyCompileSdk35() }
               }
           }
           EOF
