@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../services/auth_service.dart';
+import '../services/backup_service.dart';
 import '../services/profile_service.dart';
 import '../utils/sign_out_helper.dart';
 import '../utils/validators.dart';
@@ -24,10 +26,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _fullNameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _firmNameCtrl = TextEditingController();
+  final _backupService = BackupService();
 
   bool _loading = true;
   bool _saving = false;
   bool _hasError = false;
+  bool _backingUp = false;
   String? _email;
 
   @override
@@ -106,6 +110,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _confirmSignOut() =>
       SignOutHelper.confirmAndSignOut(context, authService: _authService);
 
+  /// Tüm müvekkil/dosya/ödeme verisini tek bir JSON dosyasına yedekleyip
+  /// paylaşım ekranı üzerinden (Drive/e-posta/WhatsApp vb.) dışarı çıkarır.
+  /// Uygulama tüm verisini yalnızca cihazda tutuyor - telefon kaybolur/
+  /// resetlenirse bu yedek olmadan geri dönüş yok.
+  Future<void> _exportBackup() async {
+    setState(() => _backingUp = true);
+    try {
+      final file = await _backupService.exportToFile();
+      if (!mounted) return;
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        subject: 'Avukat Asistan Yedek',
+        text: 'Avukat Asistan veri yedeği.',
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Yedek oluşturulamadı. Lütfen tekrar deneyin.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _backingUp = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -160,6 +189,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 : const Text('Kaydet'),
           ),
           const SizedBox(height: 32),
+          OutlinedButton.icon(
+            onPressed: _backingUp ? null : _exportBackup,
+            icon: _backingUp
+                ? const SizedBox(
+                    height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.backup_outlined),
+            label: Text(_backingUp ? 'Yedek hazırlanıyor...' : 'Verileri Yedekle'),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Tüm müvekkil, dosya ve ödeme verileriniz sadece bu cihazda tutulur. '
+            'Telefon değişikliği veya sıfırlama öncesi yedek almanız önerilir.',
+            style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 12),
+          ),
+          const SizedBox(height: 24),
           OutlinedButton.icon(
             onPressed: _confirmSignOut,
             icon: const Icon(Icons.logout),

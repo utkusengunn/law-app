@@ -1,24 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../models/case_file.dart';
-import '../models/deadline.dart';
-import '../models/hearing.dart';
-import '../models/legal_task.dart';
-import '../models/meeting.dart';
-import '../models/payment.dart';
 import '../services/case_service.dart';
 import '../services/client_service.dart';
-import '../services/deadline_service.dart';
-import '../services/hearing_service.dart';
-import '../services/meeting_service.dart';
-import '../services/payment_service.dart';
-import '../services/task_service.dart';
+import '../utils/agenda_builder.dart';
 import '../utils/date_formatters.dart';
-import '../utils/event_style.dart';
 import '../widgets/agenda_card.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/section_header.dart';
-import 'case_detail_screen.dart';
 import 'case_form_screen.dart';
 import 'client_detail_screen.dart';
 import 'client_form_screen.dart';
@@ -41,13 +29,21 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final _hearingService = HearingService();
-  final _meetingService = MeetingService();
-  final _taskService = TaskService();
-  final _deadlineService = DeadlineService();
-  final _paymentService = PaymentService();
   final _caseService = CaseService();
   final _clientService = ClientService();
+  late final AgendaBuilder _agendaBuilder;
+
+  @override
+  void initState() {
+    super.initState();
+    _agendaBuilder = AgendaBuilder(
+      onOpenHearing: (h) => _push(HearingFormScreen(caseId: h.caseId, hearing: h)),
+      onOpenMeeting: (m) => _push(ClientDetailScreen(clientId: m.clientId)),
+      onOpenTask: (t) => _push(TaskFormScreen(task: t)),
+      onOpenDeadline: (d) => _push(DeadlineFormScreen(caseId: d.caseId, deadline: d)),
+      onOpenPayment: (p) => _push(ClientDetailScreen(clientId: p.clientId)),
+    );
+  }
 
   void _refresh() => setState(() {});
 
@@ -241,16 +237,6 @@ class _HomeScreenState extends State<HomeScreen> {
     await _push(builder(clientId));
   }
 
-  String? _clientNameForCase(String? caseId) {
-    if (caseId == null) return null;
-    final caseFile = _caseService.getById(caseId);
-    if (caseFile == null) return null;
-    return _clientService.getById(caseFile.clientId)?.displayName;
-  }
-
-  CaseFile? _caseFor(String? caseId) =>
-      caseId == null ? null : _caseService.getById(caseId);
-
   /// [days] gün içindeki (bugün dahil) tüm kayıt türlerini, türü ilk bakışta
   /// belli eden [AgendaCard] listesi olarak tarih sırasına göre toplar.
   /// [excludeToday] true ise bugünün kayıtları hariç tutulur (Yaklaşanlar
@@ -275,117 +261,16 @@ class _HomeScreenState extends State<HomeScreen> {
           : DateFormatters.formatDayMonth(date);
     }
 
-    final items = <_AgendaEntry>[];
+    final entries = _agendaBuilder.collect(inRange: inRange);
 
-    for (final Hearing h in _hearingService.getAll()) {
-      if (h.status != HearingStatus.scheduled) continue;
-      if (!inRange(h.date)) continue;
-      items.add(_AgendaEntry(
-        date: h.date,
-        type: AppEventType.hearing,
-        timeLabel: timeLabelFor(h.date, hasTime: true),
-        personLine: _clientNameForCase(h.caseId),
-        detailLine: '${h.court} · Dosya: ${h.caseNumber}',
-        onTap: () => _push(HearingFormScreen(caseId: h.caseId, hearing: h)),
-      ));
-    }
-
-    for (final Meeting m in _meetingService.getAll()) {
-      if (m.status != MeetingStatus.scheduled) continue;
-      if (!inRange(m.date)) continue;
-      final client = _clientService.getById(m.clientId);
-      final caseFile = _caseFor(m.caseId);
-      items.add(_AgendaEntry(
-        date: m.date,
-        type: AppEventType.meeting,
-        timeLabel: timeLabelFor(m.date, hasTime: true),
-        personLine: client?.displayName ?? 'Görüşme',
-        detailLine: caseFile != null
-            ? 'Dosya: ${caseFile.caseNumber}'
-            : (m.note != null && m.note!.isNotEmpty ? m.note : null),
-        onTap: () => _push(ClientDetailScreen(clientId: m.clientId)),
-      ));
-    }
-
-    for (final LegalTask t in _taskService.getAll()) {
-      if (t.status == TaskStatus.done) continue;
-      if (t.dueDate == null || !inRange(t.dueDate!)) continue;
-      final caseFile = _caseFor(t.caseId);
-      items.add(_AgendaEntry(
-        date: t.dueDate!,
-        type: AppEventType.task,
-        timeLabel: timeLabelFor(t.dueDate!, hasTime: false),
-        personLine: t.title,
-        detailLine: caseFile != null ? 'Dosya: ${caseFile.caseNumber}' : null,
-        onTap: () => _push(TaskFormScreen(task: t)),
-      ));
-    }
-
-    for (final Deadline d in _deadlineService.getAll()) {
-      if (d.status != DeadlineStatus.pending) continue;
-      if (!inRange(d.dueDate)) continue;
-      final caseFile = _caseFor(d.caseId);
-      items.add(_AgendaEntry(
-        date: d.dueDate,
-        type: AppEventType.deadline,
-        timeLabel: timeLabelFor(d.dueDate, hasTime: false),
-        personLine: d.title,
-        detailLine: caseFile != null
-            ? 'Dosya: ${caseFile.caseNumber} · Son tarih'
-            : 'Son tarih',
-        onTap: () => _push(DeadlineFormScreen(caseId: d.caseId, deadline: d)),
-      ));
-    }
-
-    for (final Payment p in _paymentService.getAll()) {
-      final effective = p.effectiveStatus;
-      if (effective != PaymentStatus.waiting &&
-          effective != PaymentStatus.partial &&
-          effective != PaymentStatus.overdue) {
-        continue;
-      }
-      final due = p.effectiveDueDate;
-      if (due == null || !inRange(due)) continue;
-      final client = _clientService.getById(p.clientId);
-      items.add(_AgendaEntry(
-        date: due,
-        type: AppEventType.payment,
-        timeLabel: timeLabelFor(due, hasTime: false),
-        personLine: client?.displayName ?? 'Bilinmeyen müvekkil',
-        detailLine:
-            'Kalan ${p.remainingAmount.toStringAsFixed(2)} ${p.currency}',
-        onTap: () => _push(ClientDetailScreen(clientId: p.clientId)),
-      ));
-    }
-
-    items.sort((a, b) => a.date.compareTo(b.date));
-
-    return items
+    return entries
         .map((e) => AgendaCard(
               type: e.type,
-              timeLabel: e.timeLabel,
+              timeLabel: timeLabelFor(e.date, hasTime: e.hasTime),
               personLine: e.personLine,
               detailLine: e.detailLine,
               onTap: e.onTap,
             ))
         .toList();
   }
-}
-
-class _AgendaEntry {
-  _AgendaEntry({
-    required this.date,
-    required this.type,
-    required this.timeLabel,
-    required this.onTap,
-    this.personLine,
-    this.detailLine,
-  });
-
-  final DateTime date;
-  final AppEventType type;
-  final String timeLabel;
-  final String? personLine;
-  final String? detailLine;
-  final VoidCallback onTap;
 }

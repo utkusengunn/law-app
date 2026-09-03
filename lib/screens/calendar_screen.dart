@@ -1,44 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 
-import '../models/deadline.dart';
-import '../models/hearing.dart';
-import '../models/legal_task.dart';
-import '../models/meeting.dart';
-import '../models/payment.dart';
-import '../services/client_service.dart';
-import '../services/deadline_service.dart';
-import '../services/hearing_service.dart';
-import '../services/meeting_service.dart';
-import '../services/payment_service.dart';
-import '../services/task_service.dart';
+import '../utils/agenda_builder.dart';
 import '../utils/date_formatters.dart';
-import '../utils/event_style.dart';
+import '../widgets/agenda_card.dart';
 import '../widgets/empty_state.dart';
-import '../widgets/event_tile.dart';
 import 'client_detail_screen.dart';
 import 'deadline_form_screen.dart';
 import 'hearing_form_screen.dart';
 import 'task_form_screen.dart';
 
-class _CalendarEntry {
-  _CalendarEntry({
-    required this.date,
-    required this.type,
-    required this.title,
-    required this.subtitle,
-    this.onTap,
-  });
+enum _QuickFilter { today, tomorrow, week, month }
 
-  final DateTime date;
-  final AppEventType type;
-  final String title;
-  final String subtitle;
-  final VoidCallback? onTap;
-}
-
-/// Ay görünümlü takvim: günlerde kayıt işaretleri, seçilen güne ait
-/// kayıtlar tür bazlı ikon/renk ile aşağıda listelenir.
+/// Ay görünümlü takvim: günlerde kayıt işaretleri + seçili güne ait kayıtlar,
+/// veya Bugün/Yarın/Bu Hafta/Bu Ay hızlı filtrelerinden biri seçiliyken o
+/// aralıktaki tüm kayıtlar - her ikisi de tür/kişi/dosya bilgisiyle zengin
+/// kartlarda ([AgendaCard], ana sayfayla aynı bileşen - md.10 tutarlılık).
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
 
@@ -47,111 +24,35 @@ class CalendarScreen extends StatefulWidget {
 }
 
 class _CalendarScreenState extends State<CalendarScreen> {
-  final _hearingService = HearingService();
-  final _meetingService = MeetingService();
-  final _deadlineService = DeadlineService();
-  final _taskService = TaskService();
-  final _paymentService = PaymentService();
-  final _clientService = ClientService();
+  late final AgendaBuilder _agendaBuilder;
 
   DateTime _focusedDay = DateTime.now();
   DateTime _selectedDay = DateTime.now();
+  _QuickFilter? _activeFilter;
 
-  Map<DateTime, List<_CalendarEntry>> _eventsByDay = {};
+  Map<DateTime, List<AgendaEntryData>> _eventsByDay = {};
 
   @override
   void initState() {
     super.initState();
+    _agendaBuilder = AgendaBuilder(
+      onOpenHearing: (h) => _push(HearingFormScreen(caseId: h.caseId, hearing: h)),
+      onOpenMeeting: (m) => _push(ClientDetailScreen(clientId: m.clientId)),
+      onOpenTask: (t) => _push(TaskFormScreen(task: t)),
+      onOpenDeadline: (d) => _push(DeadlineFormScreen(caseId: d.caseId, deadline: d)),
+      onOpenPayment: (p) => _push(ClientDetailScreen(clientId: p.clientId)),
+    );
     _loadEvents();
   }
 
   DateTime _dayKey(DateTime d) => DateTime(d.year, d.month, d.day);
 
   void _loadEvents() {
-    final map = <DateTime, List<_CalendarEntry>>{};
-
-    void addEntry(DateTime date, _CalendarEntry entry) {
-      final key = _dayKey(date);
-      map.putIfAbsent(key, () => []).add(entry);
+    final all = _agendaBuilder.collect(inRange: (_) => true);
+    final map = <DateTime, List<AgendaEntryData>>{};
+    for (final e in all) {
+      map.putIfAbsent(_dayKey(e.date), () => []).add(e);
     }
-
-    for (final Hearing h in _hearingService.getAll()) {
-      addEntry(
-        h.date,
-        _CalendarEntry(
-          date: h.date,
-          type: AppEventType.hearing,
-          title: h.hearingType,
-          subtitle: '${DateFormatters.formatTime(h.date)} · ${h.court}',
-          onTap: () => _push(HearingFormScreen(caseId: h.caseId, hearing: h)),
-        ),
-      );
-    }
-
-    for (final Meeting m in _meetingService.getAll()) {
-      final client = _clientService.getById(m.clientId);
-      addEntry(
-        m.date,
-        _CalendarEntry(
-          date: m.date,
-          type: AppEventType.meeting,
-          title: client?.displayName ?? 'Görüşme',
-          subtitle: DateFormatters.formatTime(m.date),
-          onTap: () => _push(ClientDetailScreen(clientId: m.clientId)),
-        ),
-      );
-    }
-
-    for (final Deadline d in _deadlineService.getAll()) {
-      if (d.status != DeadlineStatus.pending) continue;
-      addEntry(
-        d.dueDate,
-        _CalendarEntry(
-          date: d.dueDate,
-          type: AppEventType.deadline,
-          title: d.title,
-          subtitle: 'Son tarih',
-          onTap: () => _push(DeadlineFormScreen(caseId: d.caseId, deadline: d)),
-        ),
-      );
-    }
-
-    for (final LegalTask t in _taskService.getAll()) {
-      if (t.status == TaskStatus.done || t.dueDate == null) continue;
-      addEntry(
-        t.dueDate!,
-        _CalendarEntry(
-          date: t.dueDate!,
-          type: AppEventType.task,
-          title: t.title,
-          subtitle: 'Son tarih',
-          onTap: () => _push(TaskFormScreen(task: t)),
-        ),
-      );
-    }
-
-    for (final Payment p in _paymentService.getAll()) {
-      final due = p.effectiveDueDate;
-      if (due == null) continue;
-      final effective = p.effectiveStatus;
-      if (effective != PaymentStatus.waiting &&
-          effective != PaymentStatus.partial &&
-          effective != PaymentStatus.overdue) {
-        continue;
-      }
-      addEntry(
-        due,
-        _CalendarEntry(
-          date: due,
-          type: AppEventType.payment,
-          title:
-              '${p.paymentType} · Kalan ${p.remainingAmount.toStringAsFixed(2)} ${p.currency}',
-          subtitle: 'Vade',
-          onTap: () => _push(ClientDetailScreen(clientId: p.clientId)),
-        ),
-      );
-    }
-
     setState(() => _eventsByDay = map);
   }
 
@@ -160,25 +61,51 @@ class _CalendarScreenState extends State<CalendarScreen> {
     _loadEvents();
   }
 
-  List<_CalendarEntry> _eventsForDay(DateTime day) {
-    return _eventsByDay[_dayKey(day)] ?? const [];
+  List<AgendaEntryData> _eventsForDay(DateTime day) =>
+      _eventsByDay[_dayKey(day)] ?? const [];
+
+  /// Seçili hızlı filtreye göre tarih aralığı kontrolü.
+  bool _inActiveRange(DateTime date) {
+    final now = DateTime.now();
+    switch (_activeFilter!) {
+      case _QuickFilter.today:
+        return DateFormatters.isSameDay(date, now);
+      case _QuickFilter.tomorrow:
+        return DateFormatters.isSameDay(date, now.add(const Duration(days: 1)));
+      case _QuickFilter.week:
+        final startOfWeek = DateFormatters.startOfDay(now)
+            .subtract(Duration(days: now.weekday - 1));
+        final endOfWeek = startOfWeek.add(const Duration(days: 6));
+        final target = DateFormatters.startOfDay(date);
+        return !target.isBefore(startOfWeek) && !target.isAfter(endOfWeek);
+      case _QuickFilter.month:
+        return date.year == now.year && date.month == now.month;
+    }
+  }
+
+  void _selectFilter(_QuickFilter? filter) {
+    setState(() {
+      _activeFilter = _activeFilter == filter ? null : filter;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final selectedEvents = _eventsForDay(_selectedDay)
-      ..sort((a, b) => a.date.compareTo(b.date));
+    final entries = _activeFilter != null
+        ? (_agendaBuilder.collect(inRange: _inActiveRange))
+        : (_eventsForDay(_selectedDay)..sort((a, b) => a.date.compareTo(b.date)));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Takvim')),
       body: Column(
         children: [
-          TableCalendar<_CalendarEntry>(
+          TableCalendar<AgendaEntryData>(
             locale: 'tr_TR',
             firstDay: DateTime(2015, 1, 1),
             lastDay: DateTime(2035, 12, 31),
             focusedDay: _focusedDay,
-            selectedDayPredicate: (day) => DateFormatters.isSameDay(day, _selectedDay),
+            selectedDayPredicate: (day) =>
+                _activeFilter == null && DateFormatters.isSameDay(day, _selectedDay),
             eventLoader: _eventsForDay,
             startingDayOfWeek: StartingDayOfWeek.monday,
             calendarFormat: CalendarFormat.month,
@@ -187,22 +114,23 @@ class _CalendarScreenState extends State<CalendarScreen> {
               setState(() {
                 _selectedDay = selected;
                 _focusedDay = focused;
+                _activeFilter = null;
               });
             },
             onPageChanged: (focused) {
               _focusedDay = focused;
             },
-            calendarStyle: const CalendarStyle(
+            calendarStyle: CalendarStyle(
               markerDecoration: BoxDecoration(
-                color: Color(0xFF12294F),
+                color: Theme.of(context).colorScheme.primary,
                 shape: BoxShape.circle,
               ),
               todayDecoration: BoxDecoration(
-                color: Color(0xFFBFD0E6),
+                color: Theme.of(context).colorScheme.primaryContainer,
                 shape: BoxShape.circle,
               ),
               selectedDecoration: BoxDecoration(
-                color: Color(0xFF12294F),
+                color: Theme.of(context).colorScheme.primary,
                 shape: BoxShape.circle,
               ),
             ),
@@ -212,18 +140,39 @@ class _CalendarScreenState extends State<CalendarScreen> {
             ),
           ),
           const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _filterChip('Bugün', _QuickFilter.today),
+                  const SizedBox(width: 8),
+                  _filterChip('Yarın', _QuickFilter.tomorrow),
+                  const SizedBox(width: 8),
+                  _filterChip('Bu Hafta', _QuickFilter.week),
+                  const SizedBox(width: 8),
+                  _filterChip('Bu Ay', _QuickFilter.month),
+                ],
+              ),
+            ),
+          ),
           Expanded(
-            child: selectedEvents.isEmpty
-                ? const EmptyState(message: 'Bu gün için kayıt bulunmuyor.')
+            child: entries.isEmpty
+                ? EmptyState(
+                    message: _activeFilter != null
+                        ? 'Bu aralıkta kayıt bulunmuyor.'
+                        : 'Bu gün için kayıt bulunmuyor.',
+                  )
                 : ListView.builder(
-                    itemCount: selectedEvents.length,
+                    itemCount: entries.length,
                     itemBuilder: (context, index) {
-                      final e = selectedEvents[index];
-                      return EventTile(
-                        icon: EventStyle.iconFor(e.type),
-                        color: EventStyle.colorFor(e.type),
-                        title: e.title,
-                        subtitle: e.subtitle,
+                      final e = entries[index];
+                      return AgendaCard(
+                        type: e.type,
+                        timeLabel: _timeLabelFor(e),
+                        personLine: e.personLine,
+                        detailLine: e.detailLine,
                         onTap: e.onTap,
                       );
                     },
@@ -231,6 +180,26 @@ class _CalendarScreenState extends State<CalendarScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  String _timeLabelFor(AgendaEntryData e) {
+    // Gün modunda (tek gün listeleniyor) sadece saat yeterli; aralık
+    // filtresi aktifken (Bu Hafta/Bu Ay) hangi gün olduğu da gösterilmeli.
+    if (_activeFilter == null) {
+      return e.hasTime ? DateFormatters.formatTime(e.date) : 'Tüm gün';
+    }
+    return e.hasTime
+        ? '${DateFormatters.formatDayMonth(e.date)} · ${DateFormatters.formatTime(e.date)}'
+        : DateFormatters.formatDayMonth(e.date);
+  }
+
+  Widget _filterChip(String label, _QuickFilter filter) {
+    final selected = _activeFilter == filter;
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => _selectFilter(filter),
     );
   }
 }

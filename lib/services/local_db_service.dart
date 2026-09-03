@@ -30,6 +30,7 @@ class LocalDbService {
       Hive.openBox<Meeting>(BoxNames.meetings),
       Hive.openBox<LegalTask>(BoxNames.tasks),
       Hive.openBox<Payment>(BoxNames.payments),
+      Hive.openBox(BoxNames.settings),
     ]);
 
     _initialized = true;
