@@ -10,6 +10,7 @@ import '../models/hearing.dart';
 import '../models/legal_task.dart';
 import '../models/meeting.dart';
 import '../models/payment.dart';
+import '../models/tevkil_isi.dart';
 import 'case_service.dart';
 import 'client_service.dart';
 import 'deadline_service.dart';
@@ -17,6 +18,7 @@ import 'hearing_service.dart';
 import 'meeting_service.dart';
 import 'payment_service.dart';
 import 'task_service.dart';
+import 'tevkil_service.dart';
 
 /// Cihazda tutulan tüm dava/müvekkil/ödeme verisinin tek bir JSON dosyasına
 /// dışa aktarılması. Uygulama muhasebe/senkron sistemi değil - bu sadece
@@ -130,13 +132,35 @@ class BackupService {
                   'paidDate': _iso(i.paidDate),
                 })
             .toList(),
+        // v0.4.5'te tevkil işi desteğiyle eklendi.
+        'source': p.source.name,
+        'tevkilIsiId': p.tevkilIsiId,
+        'payerName': p.payerName,
+      };
+
+  Map<String, dynamic> _tevkilToJson(TevkilIsi t) => {
+        'id': t.id,
+        'altTur': t.altTur.name,
+        'tarih': _iso(t.tarih),
+        'tumGun': t.tumGun,
+        'baslik': t.baslik,
+        'tevkilEdenAd': t.tevkilEdenAd,
+        'tevkilEdenIletisim': t.tevkilEdenIletisim,
+        'caseId': t.caseId,
+        'clientId': t.clientId,
+        'note': t.note,
+        'durum': t.durum.name,
+        'createdAt': _iso(t.createdAt),
+        'updatedAt': _iso(t.updatedAt),
       };
 
   /// Tüm verileri tek bir JSON dosyasına yazar ve dosya yolunu döner.
   Future<File> exportToFile() async {
     final data = {
       'app': 'Avukat Asistan',
-      'backupVersion': 1,
+      // v0.4.5: tevkilIsleri listesi + payments'a source/tevkilIsiId/
+      // payerName alanları eklendiği için 2'ye çıkarıldı.
+      'backupVersion': 2,
       'exportedAt': DateTime.now().toIso8601String(),
       'clients': ClientService().getAll().map(_clientToJson).toList(),
       'cases': CaseService().getAll().map(_caseToJson).toList(),
@@ -145,6 +169,7 @@ class BackupService {
       'meetings': MeetingService().getAll().map(_meetingToJson).toList(),
       'tasks': TaskService().getAll().map(_taskToJson).toList(),
       'payments': PaymentService().getAll().map(_paymentToJson).toList(),
+      'tevkilIsleri': TevkilService().getAll().map(_tevkilToJson).toList(),
     };
 
     final dir = await getApplicationDocumentsDirectory();

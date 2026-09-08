@@ -7,9 +7,11 @@ import 'hearing.dart';
 import 'legal_task.dart';
 import 'meeting.dart';
 import 'payment.dart';
+import 'tevkil_isi.dart';
 
 /// Tüm Hive TypeAdapter'larını tek noktadan kayıt eder.
 /// typeId 0-7 aralığı bu 8 model için ayrılmıştır, çakışma yoktur.
+/// typeId 8: TevkilIsi (v0.4.5'te eklendi).
 class HiveRegistrar {
   HiveRegistrar._();
 
@@ -22,5 +24,6 @@ class HiveRegistrar {
     Hive.registerAdapter(LegalTaskAdapter());
     Hive.registerAdapter(PaymentAdapter());
     Hive.registerAdapter(PaymentInstallmentAdapter());
+    Hive.registerAdapter(TevkilIsiAdapter());
   }
 }

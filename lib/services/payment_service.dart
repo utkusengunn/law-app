@@ -26,6 +26,9 @@ class PaymentService {
   List<Payment> getByCase(String caseId) =>
       _box.values.where((p) => p.caseId == caseId).toList();
 
+  List<Payment> getByTevkilIsi(String tevkilIsiId) =>
+      _box.values.where((p) => p.tevkilIsiId == tevkilIsiId).toList();
+
   Payment? getById(String id) {
     try {
       return _box.values.firstWhere((p) => p.id == id);
@@ -40,7 +43,10 @@ class PaymentService {
   }
 
   Future<Payment> createAndAdd({
-    required String clientId,
+    // Kendi işlerimizde zorunlu; tevkil kaynaklı ödemelerde (source ==
+    // tevkil) müvekkilimiz olmayabileceği için nullable - çağıran taraf
+    // (PaymentFormScreen) hangisi olduğuna göre doğrular.
+    String? clientId,
     String? caseId,
     required String paymentType,
     required double amount,
@@ -48,6 +54,9 @@ class PaymentService {
     DateTime? dueDate,
     String? note,
     double collectedAmount = 0,
+    PaymentSource source = PaymentSource.ownWork,
+    String? tevkilIsiId,
+    String? payerName,
   }) async {
     if (collectedAmount > amount) {
       throw PaymentValidationError('Tahsil edilen tutar toplam tutarı geçemez.');
@@ -67,6 +76,9 @@ class PaymentService {
       updatedAt: now,
       collectedAmount: collectedAmount,
       paidDate: collectedAmount >= amount ? now : null,
+      source: source,
+      tevkilIsiId: tevkilIsiId,
+      payerName: payerName,
     );
     return add(payment);
   }

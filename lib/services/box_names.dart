@@ -9,5 +9,6 @@ class BoxNames {
   static const String meetings = 'meetings_box';
   static const String tasks = 'tasks_box';
   static const String payments = 'payments_box';
+  static const String tevkilIsleri = 'tevkil_isleri_box';
   static const String settings = 'settings_box';
 }

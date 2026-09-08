@@ -8,7 +8,9 @@ import '../widgets/empty_state.dart';
 import 'client_detail_screen.dart';
 import 'deadline_form_screen.dart';
 import 'hearing_form_screen.dart';
+import 'payment_form_screen.dart';
 import 'task_form_screen.dart';
+import 'tevkil_form_screen.dart';
 
 enum _QuickFilter { today, tomorrow, week, month }
 
@@ -32,6 +34,18 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   Map<DateTime, List<AgendaEntryData>> _eventsByDay = {};
 
+  // Ekran her koşulda (veri olsun olmasın, hatta bir servis çağrısı
+  // beklenmedik şekilde patlasa bile) açılabilsin diye yükleme durumu ayrı
+  // tutuluyor. Önceden burada try/catch YOKTU - D009 denetiminde bu, diğer
+  // liste ekranlarının aksine loading/error durumu yönetmeyen tek ekran
+  // olarak işaretlenmişti (bkz. Açık Aksiyon #15). Kullanıcı "takvim
+  // açılmıyor gibi" dediğinde en olası neden buydu: veri katmanında (Hive
+  // kutusu henüz hazır değilse, bozuk/eksik bir kayıt varsa vb.) küçük bir
+  // hata, hiçbir koruma olmadığı için tüm ekranın boş/kırık görünmesine yol
+  // açabiliyordu.
+  bool _loading = true;
+  String? _loadError;
+
   @override
   void initState() {
     super.initState();
@@ -40,20 +54,42 @@ class _CalendarScreenState extends State<CalendarScreen> {
       onOpenMeeting: (m) => _push(ClientDetailScreen(clientId: m.clientId)),
       onOpenTask: (t) => _push(TaskFormScreen(task: t)),
       onOpenDeadline: (d) => _push(DeadlineFormScreen(caseId: d.caseId, deadline: d)),
-      onOpenPayment: (p) => _push(ClientDetailScreen(clientId: p.clientId)),
+      onOpenPayment: (p) => p.clientId != null
+          ? _push(ClientDetailScreen(clientId: p.clientId!))
+          : _push(PaymentFormScreen(clientId: null, payment: p)),
+      onOpenTevkil: (t) => _push(TevkilFormScreen(tevkil: t)),
     );
     _loadEvents();
   }
 
   DateTime _dayKey(DateTime d) => DateTime(d.year, d.month, d.day);
 
+  /// Takvim işaretleri için TÜM kayıtları (tarih aralığı sınırlaması olmadan)
+  /// toplar. try/catch ile sarmalı: veri katmanında herhangi bir sorun
+  /// olursa kullanıcıya anlaşılır bir hata gösterilir, takvim ızgarası yine
+  /// de (kayıtsız olarak) açılmaya devam eder - "veri yoksa/bozuksa bile
+  /// ekran sağlıklı açılmalı" gereksinimi burada karşılanıyor.
   void _loadEvents() {
-    final all = _agendaBuilder.collect(inRange: (_) => true);
-    final map = <DateTime, List<AgendaEntryData>>{};
-    for (final e in all) {
-      map.putIfAbsent(_dayKey(e.date), () => []).add(e);
+    try {
+      final all = _agendaBuilder.collect(inRange: (_) => true);
+      final map = <DateTime, List<AgendaEntryData>>{};
+      for (final e in all) {
+        map.putIfAbsent(_dayKey(e.date), () => []).add(e);
+      }
+      if (!mounted) return;
+      setState(() {
+        _eventsByDay = map;
+        _loading = false;
+        _loadError = null;
+      });
+    } catch (err) {
+      if (!mounted) return;
+      setState(() {
+        _eventsByDay = {};
+        _loading = false;
+        _loadError = 'Takvim kayıtları yüklenemedi: $err';
+      });
     }
-    setState(() => _eventsByDay = map);
   }
 
   Future<void> _push(Widget screen) async {
@@ -91,14 +127,36 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final entries = _activeFilter != null
-        ? (_agendaBuilder.collect(inRange: _inActiveRange))
-        : (_eventsForDay(_selectedDay)..sort((a, b) => a.date.compareTo(b.date)));
+    // Hızlı filtre (Bugün/Yarın/Bu Hafta/Bu Ay) seçiliyken liste her build'de
+    // yeniden hesaplanıyor - bu da bir servis çağrısı, o yüzden o da
+    // try/catch ile korunuyor. Bir hata olursa takvim ızgarası yine açık
+    // kalır, sadece alt listede hata mesajı gösterilir.
+    List<AgendaEntryData> entries = const [];
+    String? filterError;
+    try {
+      entries = _activeFilter != null
+          ? (_agendaBuilder.collect(inRange: _inActiveRange))
+          : (_eventsForDay(_selectedDay)..sort((a, b) => a.date.compareTo(b.date)));
+    } catch (err) {
+      filterError = 'Kayıtlar listelenemedi: $err';
+    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('Takvim')),
       body: Column(
         children: [
+          if (_loadError != null)
+            MaterialBanner(
+              content: Text(_loadError!),
+              backgroundColor: Theme.of(context).colorScheme.errorContainer,
+              actions: [
+                TextButton(
+                  onPressed: _loadEvents,
+                  child: const Text('Tekrar dene'),
+                ),
+              ],
+            ),
+          if (_loading) const LinearProgressIndicator(minHeight: 2),
           TableCalendar<AgendaEntryData>(
             locale: 'tr_TR',
             firstDay: DateTime(2015, 1, 1),
@@ -158,7 +216,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
             ),
           ),
           Expanded(
-            child: entries.isEmpty
+            child: filterError != null
+                ? EmptyState(
+                    icon: Icons.error_outline,
+                    message: filterError,
+                  )
+                : entries.isEmpty
                 ? EmptyState(
                     message: _activeFilter != null
                         ? 'Bu aralıkta kayıt bulunmuyor.'

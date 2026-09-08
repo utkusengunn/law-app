@@ -3,6 +3,12 @@ import 'package:hive/hive.dart';
 /// Ödeme durumu.
 enum PaymentStatus { waiting, partial, paid, overdue, cancelled }
 
+/// Ödemenin kaynağı: kendi işimizden mi, yoksa bir meslektaştan tevkil
+/// aldığımız işten mi doğuyor? (kullanıcı talebi, 2026-09-08). Varsayılan
+/// [ownWork] - mevcut tüm eski kayıtlar bu şekilde okunur, geriye dönük
+/// hiçbir veri kaybı olmaz.
+enum PaymentSource { ownWork, tevkil }
+
 /// Bir taksit/ödeme planı satırı. Durumu ayrıca saklanmaz; tutar/ödenen
 /// tutar/vade tarihinden HER ZAMAN hesaplanır (tutarsızlık riski olmasın diye).
 class PaymentInstallment {
@@ -107,7 +113,7 @@ class PaymentInstallmentAdapter extends TypeAdapter<PaymentInstallment> {
 class Payment extends HiveObject {
   Payment({
     required this.id,
-    required this.clientId,
+    this.clientId,
     this.caseId,
     required this.paymentType,
     required this.amount,
@@ -120,10 +126,17 @@ class Payment extends HiveObject {
     required this.updatedAt,
     this.collectedAmount = 0,
     List<PaymentInstallment>? installments,
+    this.source = PaymentSource.ownWork,
+    this.tevkilIsiId,
+    this.payerName,
   }) : installments = installments ?? [];
 
   String id;
-  String clientId;
+
+  /// Kendi işlerimizde her zaman doludur. Tevkil kaynaklı ödemelerde
+  /// (source == tevkil) müvekkilimiz olmayabilir, o yüzden NULLABLE -
+  /// bu, mevcut LegalTask.clientId ile aynı desen (bkz. legal_task.dart).
+  String? clientId;
   String? caseId;
   String paymentType;
   double amount;
@@ -136,6 +149,19 @@ class Payment extends HiveObject {
   DateTime updatedAt;
   double collectedAmount;
   List<PaymentInstallment> installments;
+
+  /// Bu ödeme kendi işimizden mi yoksa bir tevkil işinden mi doğdu.
+  PaymentSource source;
+
+  /// source == tevkil ise, bağlı olduğu TevkilIsi kaydının id'si.
+  String? tevkilIsiId;
+
+  /// Ödeyen kişi/kurumun görüntülenecek adı. Kendi işlerimizde müvekkil adı
+  /// zaten [clientId] üzerinden gelir; tevkil işlerinde ödemeyi genelde
+  /// müvekkil değil işi tevkil eden meslektaş/büro yapar, bu yüzden ayrı bir
+  /// alan olarak tutuluyor (varsayılan tevkil eden adı olur ama formda elle
+  /// değiştirilebilir - bazen ödeme müvekkilden de gelebiliyor).
+  String? payerName;
 
   bool get hasPlan => installments.isNotEmpty;
 
@@ -216,7 +242,11 @@ class PaymentAdapter extends TypeAdapter<Payment> {
     };
     return Payment(
       id: fields[0] as String,
-      clientId: fields[1] as String,
+      // v0.3'ten beri clientId hep String olarak yazıldı; okurken String?
+      // olarak cast etmek eski kayıtları da (hepsi dolu) sorunsuz okur -
+      // sadece Dart tarafındaki tip nullable oldu, ikili veri formatı
+      // değişmedi.
+      clientId: fields[1] as String?,
       caseId: fields[2] as String?,
       paymentType: fields[3] as String,
       amount: fields[4] as double,
@@ -232,13 +262,21 @@ class PaymentAdapter extends TypeAdapter<Payment> {
       // devreye girer - mevcut veride hiçbir kayıp olmaz.
       collectedAmount: (fields[12] as double?) ?? 0,
       installments: (fields[13] as List?)?.cast<PaymentInstallment>() ?? [],
+      // 14/15/16 tevkil işi desteğiyle (v0.4.5) eklendi - v0.6.5 ve öncesi
+      // kayıtlarda yok, null/varsayılan dönerler: hepsi "kendi işim"
+      // sayılır, hiçbir eski ödeme yanlışlıkla "tevkil" görünmez.
+      source: fields[14] != null
+          ? PaymentSource.values[fields[14] as int]
+          : PaymentSource.ownWork,
+      tevkilIsiId: fields[15] as String?,
+      payerName: fields[16] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Payment obj) {
     writer
-      ..writeByte(14)
+      ..writeByte(17)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -266,7 +304,13 @@ class PaymentAdapter extends TypeAdapter<Payment> {
       ..writeByte(12)
       ..write(obj.collectedAmount)
       ..writeByte(13)
-      ..write(obj.installments);
+      ..write(obj.installments)
+      ..writeByte(14)
+      ..write(obj.source.index)
+      ..writeByte(15)
+      ..write(obj.tevkilIsiId)
+      ..writeByte(16)
+      ..write(obj.payerName);
   }
 
   @override

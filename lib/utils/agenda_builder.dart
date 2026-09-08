@@ -6,6 +6,7 @@ import '../models/hearing.dart';
 import '../models/legal_task.dart';
 import '../models/meeting.dart';
 import '../models/payment.dart';
+import '../models/tevkil_isi.dart';
 import '../services/case_service.dart';
 import '../services/client_service.dart';
 import '../services/deadline_service.dart';
@@ -13,6 +14,7 @@ import '../services/hearing_service.dart';
 import '../services/meeting_service.dart';
 import '../services/payment_service.dart';
 import '../services/task_service.dart';
+import '../services/tevkil_service.dart';
 import 'event_style.dart';
 
 /// Ana sayfa ve takvim ekranlarının ortak "zaman çizelgesi" satırı: tür +
@@ -48,6 +50,7 @@ class AgendaBuilder {
     required this.onOpenTask,
     required this.onOpenDeadline,
     required this.onOpenPayment,
+    required this.onOpenTevkil,
   });
 
   final void Function(Hearing) onOpenHearing;
@@ -55,6 +58,7 @@ class AgendaBuilder {
   final void Function(LegalTask) onOpenTask;
   final void Function(Deadline) onOpenDeadline;
   final void Function(Payment) onOpenPayment;
+  final void Function(TevkilIsi) onOpenTevkil;
 
   final _hearingService = HearingService();
   final _meetingService = MeetingService();
@@ -63,6 +67,14 @@ class AgendaBuilder {
   final _paymentService = PaymentService();
   final _caseService = CaseService();
   final _clientService = ClientService();
+  final _tevkilService = TevkilService();
+
+  /// [clientId] null olabilir (tevkil kaynaklı ödemelerde müvekkil
+  /// olmayabilir) - null ise sorgu yapmadan direkt null döner.
+  String? _clientNameFor(String? clientId) {
+    if (clientId == null) return null;
+    return _clientService.getById(clientId)?.displayName;
+  }
 
   String? _clientNameForCase(String? caseId) {
     if (caseId == null) return null;
@@ -149,15 +161,36 @@ class AgendaBuilder {
       }
       final due = p.effectiveDueDate;
       if (due == null || !inRange(due)) continue;
-      final client = _clientService.getById(p.clientId);
+      // Tevkil kaynaklı ödemelerde müvekkil olmayabilir - o zaman ödeyen
+      // (genelde tevkil eden meslektaş) adı gösterilir.
+      final personLine = _clientNameFor(p.clientId) ??
+          p.payerName ??
+          (p.source == PaymentSource.tevkil ? 'Tevkil ödemesi' : 'Bilinmeyen müvekkil');
       items.add(AgendaEntryData(
         date: due,
         hasTime: false,
         type: AppEventType.payment,
-        personLine: client?.displayName ?? 'Bilinmeyen müvekkil',
+        personLine: personLine,
         detailLine:
             'Kalan ${p.remainingAmount.toStringAsFixed(2)} ${p.currency}',
         onTap: () => onOpenPayment(p),
+      ));
+    }
+
+    for (final TevkilIsi t in _tevkilService.getAll()) {
+      if (t.durum != TevkilDurum.pending) continue;
+      if (!inRange(t.tarih)) continue;
+      final caseFile = _caseFor(t.caseId);
+      final clientName = _clientNameFor(t.clientId);
+      items.add(AgendaEntryData(
+        date: t.tarih,
+        hasTime: !t.tumGun,
+        type: AppEventType.tevkil,
+        personLine: t.baslik,
+        detailLine: 'Tevkil eden: ${t.tevkilEdenAd}'
+            '${caseFile != null ? ' · Dosya: ${caseFile.caseNumber}' : ''}'
+            '${clientName != null ? ' · $clientName' : ''}',
+        onTap: () => onOpenTevkil(t),
       ));
     }
 

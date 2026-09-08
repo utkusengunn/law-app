@@ -8,6 +8,7 @@ import '../models/hive_registrar.dart';
 import '../models/legal_task.dart';
 import '../models/meeting.dart';
 import '../models/payment.dart';
+import '../models/tevkil_isi.dart';
 import 'box_names.dart';
 
 /// Hive'ı başlatır, adaptörleri kaydeder ve tüm kutuları açar.
@@ -30,6 +31,7 @@ class LocalDbService {
       Hive.openBox<Meeting>(BoxNames.meetings),
       Hive.openBox<LegalTask>(BoxNames.tasks),
       Hive.openBox<Payment>(BoxNames.payments),
+      Hive.openBox<TevkilIsi>(BoxNames.tevkilIsleri),
       Hive.openBox(BoxNames.settings),
     ]);
 

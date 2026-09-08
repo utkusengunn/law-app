@@ -7,6 +7,7 @@ import '../models/hearing.dart';
 import '../models/legal_task.dart';
 import '../models/meeting.dart';
 import '../models/payment.dart';
+import '../models/tevkil_isi.dart';
 
 /// Enum değerlerinin Türkçe etiketlerini ve durum renklerini üreten
 /// yardımcı fonksiyonlar. Tüm ekranlarda tutarlı görünüm sağlar.
@@ -201,6 +202,39 @@ class EnumLabels {
       case PaymentStatus.overdue:
         return Colors.red;
       case PaymentStatus.cancelled:
+        return Colors.grey;
+    }
+  }
+
+  static String tevkilAltTuru(TevkilAltTuru t) {
+    switch (t) {
+      case TevkilAltTuru.hearing:
+        return 'Duruşma';
+      case TevkilAltTuru.meeting:
+        return 'Görüşme';
+      case TevkilAltTuru.task:
+        return 'İş';
+    }
+  }
+
+  static String tevkilDurum(TevkilDurum d) {
+    switch (d) {
+      case TevkilDurum.pending:
+        return 'Bekliyor';
+      case TevkilDurum.completed:
+        return 'Tamamlandı';
+      case TevkilDurum.cancelled:
+        return 'İptal';
+    }
+  }
+
+  static Color tevkilDurumColor(TevkilDurum d) {
+    switch (d) {
+      case TevkilDurum.pending:
+        return Colors.blue;
+      case TevkilDurum.completed:
+        return Colors.green;
+      case TevkilDurum.cancelled:
         return Colors.grey;
     }
   }

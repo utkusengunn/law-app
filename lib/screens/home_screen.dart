@@ -17,6 +17,8 @@ import 'payment_form_screen.dart';
 import 'payments_list_screen.dart';
 import 'profile_screen.dart';
 import 'task_form_screen.dart';
+import 'tevkil_form_screen.dart';
+import 'tevkil_list_screen.dart';
 
 /// Dashboard: "Bugün ne var, yakında ne olacak?" sorusuna hızlı cevap veren
 /// ekran. Ekleme işlemleri (Müvekkil/Dosya/Süre/Duruşma/Görüşme/İş/Ödeme)
@@ -41,7 +43,12 @@ class _HomeScreenState extends State<HomeScreen> {
       onOpenMeeting: (m) => _push(ClientDetailScreen(clientId: m.clientId)),
       onOpenTask: (t) => _push(TaskFormScreen(task: t)),
       onOpenDeadline: (d) => _push(DeadlineFormScreen(caseId: d.caseId, deadline: d)),
-      onOpenPayment: (p) => _push(ClientDetailScreen(clientId: p.clientId)),
+      // Tevkil kaynaklı ödemede müvekkil olmayabilir - o zaman müvekkil
+      // detayına değil, doğrudan ödeme formuna gidilir.
+      onOpenPayment: (p) => p.clientId != null
+          ? _push(ClientDetailScreen(clientId: p.clientId!))
+          : _push(PaymentFormScreen(clientId: null, payment: p)),
+      onOpenTevkil: (t) => _push(TevkilFormScreen(tevkil: t)),
     );
   }
 
@@ -67,6 +74,11 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.payments_outlined),
             tooltip: 'Tüm Ödemeler',
             onPressed: () => _push(const PaymentsListScreen()),
+          ),
+          IconButton(
+            icon: const Icon(Icons.handshake_outlined),
+            tooltip: 'Tevkil İşlerim',
+            onPressed: () => _push(const TevkilListScreen()),
           ),
         ],
       ),
@@ -164,6 +176,13 @@ class _HomeScreenState extends State<HomeScreen> {
               title: const Text('Ödeme'),
               onTap: () => _drawerAction(() =>
                   _pickClientThen((clientId) => PaymentFormScreen(clientId: clientId))),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.handshake_outlined),
+              title: const Text('Tevkil İşi Ekle'),
+              subtitle: const Text('Bir meslektaştan alınan iş'),
+              onTap: () => _drawerAction(() => _push(const TevkilFormScreen())),
             ),
           ],
         ),

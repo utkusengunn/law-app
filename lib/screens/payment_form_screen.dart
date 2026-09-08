@@ -21,11 +21,24 @@ class PaymentFormScreen extends StatefulWidget {
     required this.clientId,
     this.caseId,
     this.payment,
+    this.tevkilIsiId,
+    this.defaultPayerName,
   });
 
-  final String clientId;
+  /// Kendi işlerimizde her zaman dolu gelir; tevkil kaynaklı bir ödeme için
+  /// (müvekkil seçilmediyse) null geçilir - o durumda [tevkilIsiId] ve
+  /// [defaultPayerName] devreye girer.
+  final String? clientId;
   final String? caseId;
   final Payment? payment;
+
+  /// Bu ödeme bir tevkil işinden mi oluşturuluyor - doluysa formda "Ödeyen"
+  /// alanı gösterilir ve kaydedilen ödeme source=tevkil olarak işaretlenir.
+  final String? tevkilIsiId;
+
+  /// "Ödeyen" alanının varsayılan değeri - genelde tevkil eden meslektaşın
+  /// adı, ama elle değiştirilebilir (bazen ödeme müvekkilden de gelebiliyor).
+  final String? defaultPayerName;
 
   @override
   State<PaymentFormScreen> createState() => _PaymentFormScreenState();
@@ -40,8 +53,16 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
   late final TextEditingController _currencyCtrl;
   late final TextEditingController _noteCtrl;
   late final TextEditingController _upfrontCollectedCtrl;
+  late final TextEditingController _payerNameCtrl;
   DateTime? _dueDate;
   bool _saving = false;
+
+  /// Tevkil kaynaklı bir ödeme mi - yeni kayıtta [tevkilIsiId] üzerinden,
+  /// düzenlemede mevcut kaydın [Payment.source] alanından anlaşılır.
+  /// "Ödeyen" alanı sadece bu durumda gösterilir; kendi işlerimizde ödeyen
+  /// zaten müvekkildir, ayrıca sorulmaz.
+  bool get _isTevkil =>
+      widget.tevkilIsiId != null || _payment?.source == PaymentSource.tevkil;
 
   /// Yalnızca YENİ ödeme oluştururken seçilebilir; mevcut bir ödemenin modu
   /// (planlı/plansız) [widget.payment.hasPlan] üzerinden zaten sabittir.
@@ -60,6 +81,8 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
     _currencyCtrl = TextEditingController(text: p?.currency ?? 'TRY');
     _noteCtrl = TextEditingController(text: p?.note ?? '');
     _upfrontCollectedCtrl = TextEditingController();
+    _payerNameCtrl =
+        TextEditingController(text: p?.payerName ?? widget.defaultPayerName ?? '');
     _dueDate = p?.dueDate;
     _usePlan = p?.hasPlan ?? false;
   }
@@ -71,6 +94,7 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
     _currencyCtrl.dispose();
     _noteCtrl.dispose();
     _upfrontCollectedCtrl.dispose();
+    _payerNameCtrl.dispose();
     for (final row in _draftInstallments) {
       row.controller.dispose();
     }
@@ -115,6 +139,10 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
         p.paymentType = _typeCtrl.text.trim();
         p.currency = currency;
         p.note = _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim();
+        if (_isTevkil) {
+          p.payerName =
+              _payerNameCtrl.text.trim().isEmpty ? null : _payerNameCtrl.text.trim();
+        }
         if (!p.hasPlan) {
           // Plansız ödemelerde toplam tutar düzenlenebilir, ama zaten tahsil
           // edilenden az olamaz.
@@ -141,6 +169,11 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
           dueDate: _usePlan ? null : _dueDate,
           note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
           collectedAmount: upfront,
+          source: _isTevkil ? PaymentSource.tevkil : PaymentSource.ownWork,
+          tevkilIsiId: widget.tevkilIsiId,
+          payerName: _isTevkil
+              ? (_payerNameCtrl.text.trim().isEmpty ? null : _payerNameCtrl.text.trim())
+              : null,
         );
         if (_usePlan) {
           final plan = _draftInstallments
@@ -254,6 +287,17 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
               ],
             ),
             const SizedBox(height: 16),
+            if (_isTevkil) ...[
+              TextFormField(
+                controller: _payerNameCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Ödeyen',
+                  helperText:
+                      'Genelde tevkil eden meslektaş/büro; müvekkilden geliyorsa değiştirin.',
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             if (!_isEdit) ...[
               const Text('Ödeme Şekli', style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
