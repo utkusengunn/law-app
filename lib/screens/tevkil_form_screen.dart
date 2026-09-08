@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
 
 import '../models/payment.dart';
 import '../models/tevkil_isi.dart';
@@ -8,6 +9,7 @@ import '../services/payment_service.dart';
 import '../services/tevkil_service.dart';
 import '../utils/date_formatters.dart';
 import '../utils/enum_labels.dart';
+import '../utils/phone_actions.dart';
 import '../utils/validators.dart';
 import 'payment_form_screen.dart';
 
@@ -162,6 +164,31 @@ class _TevkilFormScreenState extends State<TevkilFormScreen> {
     setState(() => _clientId = clientId);
   }
 
+  /// Rehberden isim seçme (kullanıcı talebi, 2026-09-08, backlog D015.6).
+  /// Bilinçli olarak `openExternalPick()` kullanılıyor - sistemin kendi
+  /// rehber seçme ekranını açar, uygulamanın READ_CONTACTS izni istemesine
+  /// GEREK KALMAZ (bkz. pubspec.yaml'daki açıklama).
+  Future<void> _pickFromContacts() async {
+    try {
+      final contact = await FlutterContacts.openExternalPick();
+      if (contact == null || !mounted) return;
+      setState(() {
+        if (contact.displayName.isNotEmpty) {
+          _tevkilEdenAdCtrl.text = contact.displayName;
+        }
+        if (contact.phones.isNotEmpty) {
+          _tevkilEdenIletisimCtrl.text = contact.phones.first.number;
+        }
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Rehber açılamadı.')),
+        );
+      }
+    }
+  }
+
   Future<void> _pickPaymentDueDate() async {
     final date = await showDatePicker(
       context: context,
@@ -288,7 +315,14 @@ class _TevkilFormScreenState extends State<TevkilFormScreen> {
             const Divider(height: 24),
             TextFormField(
               controller: _tevkilEdenAdCtrl,
-              decoration: const InputDecoration(labelText: 'Tevkil Eden Avukat/Büro *'),
+              decoration: InputDecoration(
+                labelText: 'Tevkil Eden Avukat/Büro *',
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.contacts_outlined),
+                  tooltip: 'Rehberden seç',
+                  onPressed: _pickFromContacts,
+                ),
+              ),
               validator: (v) =>
                   Validators.requiredField(v, fieldName: 'Tevkil eden avukat/büro'),
             ),
@@ -296,7 +330,34 @@ class _TevkilFormScreenState extends State<TevkilFormScreen> {
             TextFormField(
               controller: _tevkilEdenIletisimCtrl,
               decoration: const InputDecoration(labelText: 'İletişim (telefon/e-posta)'),
+              onChanged: (_) => setState(() {}),
             ),
+            // Sadece bir şey yazılmışsa ve makul bir telefon numarasına
+            // benziyorsa (en az 7 rakam) gösterilir - e-posta girilmişse
+            // gösterilmez (kullanıcı talebi, backlog D015.7).
+            if (_tevkilEdenIletisimCtrl.text
+                    .replaceAll(RegExp(r'[^0-9]'), '')
+                    .length >=
+                7) ...[
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  TextButton.icon(
+                    onPressed: () =>
+                        PhoneActions.call(context, _tevkilEdenIletisimCtrl.text),
+                    icon: const Icon(Icons.call_outlined, size: 18),
+                    label: const Text('Ara'),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton.icon(
+                    onPressed: () =>
+                        PhoneActions.whatsapp(context, _tevkilEdenIletisimCtrl.text),
+                    icon: const Icon(Icons.chat_outlined, size: 18),
+                    label: const Text('WhatsApp'),
+                  ),
+                ],
+              ),
+            ],
             const Divider(height: 24),
             ListTile(
               contentPadding: EdgeInsets.zero,

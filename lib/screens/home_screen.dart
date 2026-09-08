@@ -289,6 +289,15 @@ class _HomeScreenState extends State<HomeScreen> {
               personLine: e.personLine,
               detailLine: e.detailLine,
               onTap: e.onTap,
+              dismissKey: ValueKey(e.id),
+              // Servis çağrısını yapıp ardından ekranı yeniliyoruz ki
+              // tamamlanan iş/tevkil ajanda listesinden düşsün.
+              onComplete: e.onComplete == null
+                  ? null
+                  : () async {
+                      await e.onComplete!();
+                      _refresh();
+                    },
             ))
         .toList();
   }

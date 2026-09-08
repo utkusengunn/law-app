@@ -8,7 +8,12 @@ import 'package:hive/hive.dart';
 /// EnumLabels.tevkilAltTuru() üzerinden gösterilir. NOT: Dart enum
 /// değerleri sadece ASCII olabilir, bu yüzden "duruşma/görüşme/iş" gibi
 /// Türkçe karakterli isimler burada KULLANILAMAZ.
-enum TevkilAltTuru { hearing, meeting, task }
+///
+/// [other] (Diğer) kullanıcı talebiyle eklendi (2026-09-08, backlog D015.1)
+/// - sabit üç türe uymayan tevkil işleri için. LİSTENİN SONUNA eklendi: Hive
+/// bu enum'u index (sıra numarası) olarak sakladığı için var olan
+/// kayıtlardaki 0/1/2 (hearing/meeting/task) hiç değişmemeli.
+enum TevkilAltTuru { hearing, meeting, task, other }
 
 /// Tevkil işinin durumu - Hearing/Meeting'deki status alanlarıyla aynı
 /// mantık: sadece manuel işaretleme için saklanır, ayrıca hesaplanan bir

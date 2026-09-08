@@ -16,6 +16,8 @@ class AgendaCard extends StatelessWidget {
     this.personLine,
     this.detailLine,
     this.onTap,
+    this.dismissKey,
+    this.onComplete,
   });
 
   final AppEventType type;
@@ -31,10 +33,20 @@ class AgendaCard extends StatelessWidget {
 
   final VoidCallback? onTap;
 
+  /// [onComplete] doluysa bu ZORUNLU - Dismissible'ın kendi key'i, kayıt
+  /// başına benzersiz olmalı (bkz. AgendaEntryData.id).
+  final Key? dismissKey;
+
+  /// Doluysa kart sağa doğru kaydırılarak (yana kaydırma) tek dokunuşla
+  /// tamamlandı işaretlenebilir (kullanıcı talebi, 2026-09-08, backlog
+  /// D015.5) - detay ekranına gitmeye gerek kalmaz. Şu an sadece İş ve
+  /// Tevkil türlerinde doluyor (bkz. agenda_builder.dart).
+  final Future<void> Function()? onComplete;
+
   @override
   Widget build(BuildContext context) {
     final color = EventStyle.colorFor(type);
-    return Card(
+    final card = Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
@@ -110,6 +122,41 @@ class AgendaCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+
+    if (onComplete == null) return card;
+
+    // Yana kaydırma: yeni bir paket eklemeden (flutter_slidable vb.)
+    // Flutter'ın kendi Dismissible'ı kullanılıyor - confirmDismiss'te
+    // gerçek işlemi yapıp HER ZAMAN false döndürüyoruz, böylece kart
+    // fiziksel olarak listeden silinmiyor (Dismissible kendi başına
+    // kaldırmıyor); veri değiştiği için ekranı yenileyen taraf (home/
+    // calendar ekranı) zaten kartı listeden düşürüyor.
+    return Dismissible(
+      key: dismissKey ?? ValueKey(personLine ?? timeLabel),
+      direction: DismissDirection.startToEnd,
+      background: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        alignment: Alignment.centerLeft,
+        decoration: BoxDecoration(
+          color: Colors.green,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.check_circle_outline, color: Colors.white),
+            SizedBox(width: 8),
+            Text('Tamamlandı',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+      confirmDismiss: (_) async {
+        await onComplete!();
+        return false;
+      },
+      child: card,
     );
   }
 }

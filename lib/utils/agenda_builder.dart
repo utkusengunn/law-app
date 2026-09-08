@@ -23,20 +23,32 @@ import 'event_style.dart';
 /// navigasyon) çağıran tarafta kalır.
 class AgendaEntryData {
   AgendaEntryData({
+    required this.id,
     required this.date,
     required this.hasTime,
     required this.type,
     required this.onTap,
     this.personLine,
     this.detailLine,
+    this.onComplete,
   });
 
+  /// Dismissible key'i için benzersiz kimlik - tür + kayıt id'si
+  /// birleştirilir (aynı id'ye sahip farklı türden kayıtlar çakışmasın).
+  final String id;
   final DateTime date;
   final bool hasTime;
   final AppEventType type;
   final String? personLine;
   final String? detailLine;
   final VoidCallback onTap;
+
+  /// Doldurulmuşsa (sadece İş/Tevkil türlerinde), ana sayfa/takvimdeki
+  /// kartın yana kaydırılmasıyla tek dokunuşta tamamlandı işaretlenebilir
+  /// (kullanıcı talebi, 2026-09-08, backlog D015.5). Servis çağrısını yapar
+  /// ama ekranı YENİLEMEZ - onu çağıran ekran (home/calendar) kendi
+  /// refresh'ini bu callback'in etrafına sarmalı.
+  final Future<void> Function()? onComplete;
 }
 
 /// Duruşma/Görüşme/İş/Süre/Ödeme kayıtlarını tek bir zaman çizelgesinde
@@ -96,6 +108,7 @@ class AgendaBuilder {
       if (h.status != HearingStatus.scheduled) continue;
       if (!inRange(h.date)) continue;
       items.add(AgendaEntryData(
+        id: 'hearing_${h.id}',
         date: h.date,
         hasTime: true,
         type: AppEventType.hearing,
@@ -111,6 +124,7 @@ class AgendaBuilder {
       final client = _clientService.getById(m.clientId);
       final caseFile = _caseFor(m.caseId);
       items.add(AgendaEntryData(
+        id: 'meeting_${m.id}',
         date: m.date,
         hasTime: true,
         type: AppEventType.meeting,
@@ -127,12 +141,14 @@ class AgendaBuilder {
       if (t.dueDate == null || !inRange(t.dueDate!)) continue;
       final caseFile = _caseFor(t.caseId);
       items.add(AgendaEntryData(
+        id: 'task_${t.id}',
         date: t.dueDate!,
         hasTime: false,
         type: AppEventType.task,
         personLine: t.title,
         detailLine: caseFile != null ? 'Dosya: ${caseFile.caseNumber}' : null,
         onTap: () => onOpenTask(t),
+        onComplete: () => _taskService.setStatus(t, TaskStatus.done),
       ));
     }
 
@@ -141,6 +157,7 @@ class AgendaBuilder {
       if (!inRange(d.dueDate)) continue;
       final caseFile = _caseFor(d.caseId);
       items.add(AgendaEntryData(
+        id: 'deadline_${d.id}',
         date: d.dueDate,
         hasTime: false,
         type: AppEventType.deadline,
@@ -167,6 +184,7 @@ class AgendaBuilder {
           p.payerName ??
           (p.source == PaymentSource.tevkil ? 'Tevkil ödemesi' : 'Bilinmeyen müvekkil');
       items.add(AgendaEntryData(
+        id: 'payment_${p.id}',
         date: due,
         hasTime: false,
         type: AppEventType.payment,
@@ -183,6 +201,7 @@ class AgendaBuilder {
       final caseFile = _caseFor(t.caseId);
       final clientName = _clientNameFor(t.clientId);
       items.add(AgendaEntryData(
+        id: 'tevkil_${t.id}',
         date: t.tarih,
         hasTime: !t.tumGun,
         type: AppEventType.tevkil,
@@ -191,6 +210,7 @@ class AgendaBuilder {
             '${caseFile != null ? ' · Dosya: ${caseFile.caseNumber}' : ''}'
             '${clientName != null ? ' · $clientName' : ''}',
         onTap: () => onOpenTevkil(t),
+        onComplete: () => _tevkilService.setDurum(t, TevkilDurum.completed),
       ));
     }
 

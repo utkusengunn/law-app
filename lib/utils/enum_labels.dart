@@ -214,6 +214,8 @@ class EnumLabels {
         return 'Görüşme';
       case TevkilAltTuru.task:
         return 'İş';
+      case TevkilAltTuru.other:
+        return 'Diğer';
     }
   }
 

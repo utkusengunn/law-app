@@ -133,7 +133,7 @@ class _TevkilListScreenState extends State<TevkilListScreen> {
           if (caseFile != null) 'Dosya: ${caseFile.caseNumber}',
           if (client != null) client.displayName,
         ];
-        return ListTile(
+        final tile = ListTile(
           leading: const Icon(Icons.handshake_outlined),
           title: Text('${EnumLabels.tevkilAltTuru(t.altTur)} · ${t.baslik}'),
           subtitle: Text(
@@ -151,6 +151,32 @@ class _TevkilListScreenState extends State<TevkilListScreen> {
             );
             _load();
           },
+        );
+        // Sadece bekleyen tevkillerde yana kaydırarak tek dokunuşla
+        // tamamlandı işaretlenebilir (kullanıcı talebi, backlog D015.5).
+        if (t.durum != TevkilDurum.pending) return tile;
+        return Dismissible(
+          key: ValueKey('tevkil_${t.id}'),
+          direction: DismissDirection.startToEnd,
+          background: Container(
+            color: Colors.green,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            alignment: Alignment.centerLeft,
+            child: const Row(
+              children: [
+                Icon(Icons.check_circle_outline, color: Colors.white),
+                SizedBox(width: 8),
+                Text('Tamamlandı',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+          confirmDismiss: (_) async {
+            await _service.setDurum(t, TevkilDurum.completed);
+            _load();
+            return false;
+          },
+          child: tile,
         );
       },
     );

@@ -97,8 +97,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
     _loadEvents();
   }
 
+  /// KÖK NEDEN BULUNDU (2026-09-08): burada önceden `?? const []`
+  /// kullanılıyordu. `const []` DEĞİŞTİRİLEMEZ (unmodifiable) bir liste -
+  /// build()'daki `_eventsForDay(_selectedDay)..sort(...)` çağrısı, o gün
+  /// için hiç kayıt yoksa tam olarak bu sabit listenin üzerinde `.sort()`
+  /// çağırmaya çalışıyordu. Bu da kullanıcının gördüğü "Unsupported
+  /// operation: cannot modify an unmodifiable list" hatasının birebir
+  /// kaynağıydı. `List<AgendaEntryData>.from(...)` ile HER ZAMAN yeni,
+  /// değiştirilebilir (growable) bir liste döndürerek düzeltildi.
   List<AgendaEntryData> _eventsForDay(DateTime day) =>
-      _eventsByDay[_dayKey(day)] ?? const [];
+      List<AgendaEntryData>.from(_eventsByDay[_dayKey(day)] ?? const []);
 
   /// Seçili hızlı filtreye göre tarih aralığı kontrolü.
   bool _inActiveRange(DateTime date) {
@@ -237,6 +245,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         personLine: e.personLine,
                         detailLine: e.detailLine,
                         onTap: e.onTap,
+                        dismissKey: ValueKey(e.id),
+                        onComplete: e.onComplete == null
+                            ? null
+                            : () async {
+                                await e.onComplete!();
+                                _loadEvents();
+                              },
                       );
                     },
                   ),

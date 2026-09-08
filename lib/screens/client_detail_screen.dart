@@ -7,6 +7,7 @@ import '../services/meeting_service.dart';
 import '../services/payment_service.dart';
 import '../utils/date_formatters.dart';
 import '../utils/enum_labels.dart';
+import '../utils/phone_actions.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/status_chip.dart';
 import 'case_detail_screen.dart';
@@ -142,7 +143,21 @@ class _ClientDetailScreenState extends State<ClientDetailScreen>
               Row(children: [
                 const Icon(Icons.phone_outlined, size: 16),
                 const SizedBox(width: 6),
-                Text(client.phone),
+                Expanded(child: Text(client.phone)),
+                // Doğrudan arama/WhatsApp (kullanıcı talebi, 2026-09-08,
+                // backlog D015.7).
+                IconButton(
+                  icon: const Icon(Icons.call_outlined, size: 20),
+                  tooltip: 'Ara',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => PhoneActions.call(context, client.phone),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.chat_outlined, size: 20),
+                  tooltip: 'WhatsApp',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => PhoneActions.whatsapp(context, client.phone),
+                ),
               ]),
               if (client.email != null) ...[
                 const SizedBox(height: 4),
