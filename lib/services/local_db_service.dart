@@ -1,7 +1,5 @@
 import 'package:hive_flutter/hive_flutter.dart';
 
-import '../models/case_file.dart';
-import '../models/client.dart';
 import '../models/deadline.dart';
 import '../models/hearing.dart';
 import '../models/hive_registrar.dart';
@@ -13,6 +11,13 @@ import 'box_names.dart';
 
 /// Hive'ı başlatır, adaptörleri kaydeder ve tüm kutuları açar.
 /// main.dart içinde runApp'ten önce çağrılmalıdır.
+///
+/// NOT (D019, 2026-09-13): Client ve CaseFile artık Hive'da DEĞİL,
+/// Firestore'da tutuluyor (bkz. client_service.dart/case_service.dart) -
+/// bu yüzden onların kutuları burada AÇILMIYOR. Geri kalan 6 model
+/// (Deadline/Hearing/Meeting/LegalTask/Payment/TevkilIsi) şimdilik hâlâ
+/// Hive'da - Firestore'a taşınmaları ayrı bir adımda yapılacak (bkz.
+/// D018/D019'daki aşamalı plan: önce Client+Case pilotu, sonra kalanı).
 class LocalDbService {
   LocalDbService._();
 
@@ -24,8 +29,6 @@ class LocalDbService {
     HiveRegistrar.registerAll();
 
     await Future.wait([
-      Hive.openBox<Client>(BoxNames.clients),
-      Hive.openBox<CaseFile>(BoxNames.cases),
       Hive.openBox<Deadline>(BoxNames.deadlines),
       Hive.openBox<Hearing>(BoxNames.hearings),
       Hive.openBox<Meeting>(BoxNames.meetings),

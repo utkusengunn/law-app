@@ -1,15 +1,25 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+import 'firebase_options.dart';
 import 'screens/auth_gate.dart';
 import 'services/local_db_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await LocalDbService.init();
-  await Firebase.initializeApp();
+  // Android/iOS: yerel yapılandırma dosyalarından (google-services.json vb.)
+  // otomatik okunuyor, options vermeye gerek yok. Web'de ise böyle bir yerel
+  // dosya mekanizması yok - config'i Dart tarafında açıkça vermek gerekiyor
+  // (bkz. firebase_options.dart - D021, 2026-09-13, web/PWA denemesi).
+  if (kIsWeb) {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
+  } else {
+    await Firebase.initializeApp();
+  }
   await initializeDateFormatting('tr_TR', null);
   runApp(const AvukatAsistanApp());
 }

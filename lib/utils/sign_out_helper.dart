@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
+import '../services/case_service.dart';
+import '../services/client_service.dart';
 
 /// Uygulama genelinde tutarlı çıkış yapma akışı: onay diyaloğu, işlem
 /// sırasında görsel geri bildirim ("Çıkış yapılıyor...") ve tekrar tekrar
@@ -66,6 +68,11 @@ class SignOutHelper {
     String? errorMessage;
     try {
       await authService.signOut();
+      // Firestore önbelleğini/dinleyicisini temizle (D019, 2026-09-13) - aksi
+      // halde aynı cihazda farklı bir hesapla giriş yapıldığında bir önceki
+      // kullanıcının müvekkil/dosya verisi bir an için ekranda kalabilir.
+      await ClientService().reset();
+      await CaseService().reset();
     } on AuthFailure catch (e) {
       errorMessage = e.message;
     } finally {

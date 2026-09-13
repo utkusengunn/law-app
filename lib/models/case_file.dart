@@ -1,11 +1,15 @@
-import 'package:hive/hive.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Dosyanın (davanın) durumu.
 enum CaseStatus { active, pending, closed }
 
 /// Dava/dosya kaydı. Dart'ın "Case" anahtar kelimesiyle karışmaması için
 /// sınıf adı "CaseFile" olarak seçildi.
-class CaseFile extends HiveObject {
+///
+/// NOT (D019, 2026-09-13): Client modeliyle aynı gerekçeyle Hive'dan
+/// Firestore'a taşındı - `users/{uid}/cases/{id}`. Enum artık isim (string)
+/// olarak saklanıyor, Hive'daki index kısıtı yok.
+class CaseFile {
   CaseFile({
     required this.id,
     required this.name,
@@ -22,6 +26,7 @@ class CaseFile extends HiveObject {
     required this.updatedAt,
   });
 
+  /// Firestore doküman ID'si - ayrıca bir alan olarak saklanmaz.
   String id;
   String name;
   String caseType;
@@ -66,74 +71,46 @@ class CaseFile extends HiveObject {
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
-}
 
-class CaseFileAdapter extends TypeAdapter<CaseFile> {
-  @override
-  final int typeId = 1;
+  Map<String, dynamic> toMap() => {
+        'name': name,
+        'caseType': caseType,
+        'court': court,
+        'caseNumber': caseNumber,
+        'clientId': clientId,
+        'opposingParty': opposingParty,
+        'openDate': Timestamp.fromDate(openDate),
+        'closeDate': closeDate != null ? Timestamp.fromDate(closeDate!) : null,
+        'status': status.name,
+        'note': note,
+        'createdAt': Timestamp.fromDate(createdAt),
+        'updatedAt': Timestamp.fromDate(updatedAt),
+      };
 
-  @override
-  CaseFile read(BinaryReader reader) {
-    final numOfFields = reader.readByte();
-    final fields = <int, dynamic>{
-      for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
-    };
+  factory CaseFile.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final d = doc.data() ?? <String, dynamic>{};
     return CaseFile(
-      id: fields[0] as String,
-      name: fields[1] as String,
-      caseType: fields[2] as String,
-      court: fields[3] as String,
-      caseNumber: fields[4] as String,
-      clientId: fields[5] as String,
-      opposingParty: fields[6] as String?,
-      openDate: fields[7] as DateTime,
-      closeDate: fields[8] as DateTime?,
-      status: CaseStatus.values[fields[9] as int],
-      note: fields[10] as String?,
-      createdAt: fields[11] as DateTime,
-      updatedAt: fields[12] as DateTime,
+      id: doc.id,
+      name: d['name'] as String? ?? '',
+      caseType: d['caseType'] as String? ?? '',
+      court: d['court'] as String? ?? '',
+      caseNumber: d['caseNumber'] as String? ?? '',
+      clientId: d['clientId'] as String? ?? '',
+      opposingParty: d['opposingParty'] as String?,
+      openDate: (d['openDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      closeDate: (d['closeDate'] as Timestamp?)?.toDate(),
+      status: _enumFromName(CaseStatus.values, d['status'], CaseStatus.active),
+      note: d['note'] as String?,
+      createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      updatedAt: (d['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
+}
 
-  @override
-  void write(BinaryWriter writer, CaseFile obj) {
-    writer
-      ..writeByte(13)
-      ..writeByte(0)
-      ..write(obj.id)
-      ..writeByte(1)
-      ..write(obj.name)
-      ..writeByte(2)
-      ..write(obj.caseType)
-      ..writeByte(3)
-      ..write(obj.court)
-      ..writeByte(4)
-      ..write(obj.caseNumber)
-      ..writeByte(5)
-      ..write(obj.clientId)
-      ..writeByte(6)
-      ..write(obj.opposingParty)
-      ..writeByte(7)
-      ..write(obj.openDate)
-      ..writeByte(8)
-      ..write(obj.closeDate)
-      ..writeByte(9)
-      ..write(obj.status.index)
-      ..writeByte(10)
-      ..write(obj.note)
-      ..writeByte(11)
-      ..write(obj.createdAt)
-      ..writeByte(12)
-      ..write(obj.updatedAt);
+T _enumFromName<T>(List<T> values, dynamic name, T fallback) {
+  if (name is! String) return fallback;
+  for (final v in values) {
+    if ((v as Enum).name == name) return v;
   }
-
-  @override
-  int get hashCode => typeId.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is CaseFileAdapter &&
-          runtimeType == other.runtimeType &&
-          typeId == other.typeId;
+  return fallback;
 }

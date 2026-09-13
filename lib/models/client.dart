@@ -1,4 +1,4 @@
-import 'package:hive/hive.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Müvekkil tipi: bireysel ya da şirket.
 enum ClientType { individual, company }
@@ -8,7 +8,16 @@ enum ClientType { individual, company }
 /// kayıtları olduğu gibi korunur.
 enum ClientStatus { active, passive }
 
-class Client extends HiveObject {
+/// Müvekkil kaydı.
+///
+/// NOT (D019, 2026-09-13): Bu model eskiden Hive (cihaz-lokal depolama) ile
+/// saklanıyordu. Artık Firestore'da `users/{uid}/clients/{id}` altında
+/// tutuluyor - böylece aynı avukat hem telefonundan hem web/PC sürümünden
+/// aynı veriyi görebiliyor (bkz. D017/D018/D019 kararları). Enum alanları
+/// artık Hive'daki gibi sayısal index değil, İSİM (string) olarak
+/// saklanıyor - Firestore'da sıra/index kısıtı olmadığı için bu daha güvenli
+/// ve okunur; ileride yeni bir enum değeri eklerken sıra önemsiz olur.
+class Client {
   Client({
     required this.id,
     required this.type,
@@ -24,6 +33,8 @@ class Client extends HiveObject {
     required this.updatedAt,
   });
 
+  /// Firestore doküman ID'si - ayrıca bir alan olarak saklanmaz, sadece
+  /// bellekte taşınır.
   String id;
   ClientType type;
   String? firstName;
@@ -75,72 +86,53 @@ class Client extends HiveObject {
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
-}
 
-/// El ile yazılmış (build_runner olmadan) Hive TypeAdapter.
-class ClientAdapter extends TypeAdapter<Client> {
-  @override
-  final int typeId = 0;
+  /// Firestore'a yazılacak alan haritası. `id` dahil edilmez - doküman ID'si
+  /// zaten `id` olarak kullanılıyor, tekrar bir alan olarak saklamaya gerek
+  /// yok.
+  Map<String, dynamic> toMap() => {
+        'type': type.name,
+        'firstName': firstName,
+        'lastName': lastName,
+        'companyTitle': companyTitle,
+        'phone': phone,
+        'email': email,
+        'address': address,
+        'note': note,
+        'status': status.name,
+        'createdAt': Timestamp.fromDate(createdAt),
+        'updatedAt': Timestamp.fromDate(updatedAt),
+      };
 
-  @override
-  Client read(BinaryReader reader) {
-    final numOfFields = reader.readByte();
-    final fields = <int, dynamic>{
-      for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
-    };
+  /// Firestore dokümanından `Client` üretir. Bilinmeyen/eksik bir enum
+  /// string'i gelirse (örn. ileride bir alan yanlış yazılırsa) sessizce
+  /// varsayılana düşer - uygulamanın çökmesindense eksik/varsayılan bir
+  /// değer göstermesi tercih edildi (D014'teki "asla ekranı kırma" prensibi).
+  factory Client.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final d = doc.data() ?? <String, dynamic>{};
     return Client(
-      id: fields[0] as String,
-      type: ClientType.values[fields[1] as int],
-      firstName: fields[2] as String?,
-      lastName: fields[3] as String?,
-      companyTitle: fields[4] as String?,
-      phone: fields[5] as String,
-      email: fields[6] as String?,
-      address: fields[7] as String?,
-      note: fields[8] as String?,
-      status: ClientStatus.values[fields[9] as int],
-      createdAt: fields[10] as DateTime,
-      updatedAt: fields[11] as DateTime,
+      id: doc.id,
+      type: _enumFromName(ClientType.values, d['type'], ClientType.individual),
+      firstName: d['firstName'] as String?,
+      lastName: d['lastName'] as String?,
+      companyTitle: d['companyTitle'] as String?,
+      phone: d['phone'] as String? ?? '',
+      email: d['email'] as String?,
+      address: d['address'] as String?,
+      note: d['note'] as String?,
+      status: _enumFromName(ClientStatus.values, d['status'], ClientStatus.active),
+      createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      updatedAt: (d['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
+}
 
-  @override
-  void write(BinaryWriter writer, Client obj) {
-    writer
-      ..writeByte(12)
-      ..writeByte(0)
-      ..write(obj.id)
-      ..writeByte(1)
-      ..write(obj.type.index)
-      ..writeByte(2)
-      ..write(obj.firstName)
-      ..writeByte(3)
-      ..write(obj.lastName)
-      ..writeByte(4)
-      ..write(obj.companyTitle)
-      ..writeByte(5)
-      ..write(obj.phone)
-      ..writeByte(6)
-      ..write(obj.email)
-      ..writeByte(7)
-      ..write(obj.address)
-      ..writeByte(8)
-      ..write(obj.note)
-      ..writeByte(9)
-      ..write(obj.status.index)
-      ..writeByte(10)
-      ..write(obj.createdAt)
-      ..writeByte(11)
-      ..write(obj.updatedAt);
+/// Bir enum listesinde isme göre arama yapar, bulunamazsa/null ise
+/// [fallback] döner.
+T _enumFromName<T>(List<T> values, dynamic name, T fallback) {
+  if (name is! String) return fallback;
+  for (final v in values) {
+    if ((v as Enum).name == name) return v;
   }
-
-  @override
-  int get hashCode => typeId.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is ClientAdapter &&
-          runtimeType == other.runtimeType &&
-          typeId == other.typeId;
+  return fallback;
 }

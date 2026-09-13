@@ -1,32 +1,80 @@
-import 'package:hive/hive.dart';
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/case_file.dart';
 import '../utils/id_generator.dart';
-import 'box_names.dart';
 
-/// Dosya (dava) kayıtları için CRUD ve arama işlemleri.
+/// Dosya (dava) kayıtları için Firestore tabanlı CRUD ve arama işlemleri.
+///
+/// NOT (D019, 2026-09-13): `ClientService` ile birebir aynı desen -
+/// `users/{uid}/cases/{caseId}`, singleton + bellek içi önbellek +
+/// `snapshots()` ile canlı dinleme. Gerekçe ve sınırlamalar için
+/// `client_service.dart`'taki ayrıntılı açıklamaya bakın.
 class CaseService {
-  Box<CaseFile> get _box => Hive.box<CaseFile>(BoxNames.cases);
+  factory CaseService() => instance;
+  CaseService._internal();
 
-  List<CaseFile> getAll() => _box.values.toList();
+  static final CaseService instance = CaseService._internal();
+
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _sub;
+  List<CaseFile> _cache = [];
+  bool _loaded = false;
+
+  CollectionReference<Map<String, dynamic>> get _col {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      throw StateError('CaseService: oturum açmış kullanıcı yok.');
+    }
+    return _db.collection('users').doc(uid).collection('cases');
+  }
+
+  Future<void> ensureLoaded() async {
+    if (_loaded) return;
+    final snap = await _col.get();
+    _cache = snap.docs.map(CaseFile.fromDoc).toList();
+    _loaded = true;
+    _listen();
+  }
+
+  Future<void> reset() async {
+    await _sub?.cancel();
+    _sub = null;
+    _cache = [];
+    _loaded = false;
+  }
+
+  void _listen() {
+    _sub ??= _col.snapshots().listen(
+      (snap) {
+        _cache = snap.docs.map(CaseFile.fromDoc).toList();
+      },
+      onError: (_) {},
+    );
+  }
+
+  List<CaseFile> getAll() => List<CaseFile>.from(_cache);
 
   List<CaseFile> getByClient(String clientId) =>
-      _box.values.where((c) => c.clientId == clientId).toList();
+      _cache.where((c) => c.clientId == clientId).toList();
 
   List<CaseFile> getOpen() =>
-      _box.values.where((c) => c.status != CaseStatus.closed).toList();
+      _cache.where((c) => c.status != CaseStatus.closed).toList();
 
   CaseFile? getById(String id) {
     try {
-      return _box.values.firstWhere((c) => c.id == id);
+      return _cache.firstWhere((c) => c.id == id);
     } catch (_) {
       return null;
     }
   }
 
   List<CaseFile> search(String query, {bool includeClosed = true}) {
-    final source =
-        includeClosed ? getAll() : getAll().where((c) => c.status != CaseStatus.closed).toList();
+    final source = includeClosed
+        ? getAll()
+        : getAll().where((c) => c.status != CaseStatus.closed).toList();
     if (query.trim().isEmpty) return source;
     final q = query.trim().toLowerCase();
     return source.where((c) {
@@ -37,7 +85,8 @@ class CaseService {
   }
 
   Future<CaseFile> add(CaseFile caseFile) async {
-    await _box.put(caseFile.id, caseFile);
+    await _col.doc(caseFile.id).set(caseFile.toMap());
+    _cache = [..._cache, caseFile];
     return caseFile;
   }
 
@@ -71,7 +120,8 @@ class CaseService {
 
   Future<void> update(CaseFile caseFile) async {
     caseFile.updatedAt = DateTime.now();
-    await caseFile.save();
+    await _col.doc(caseFile.id).set(caseFile.toMap());
+    _cache = _cache.map((c) => c.id == caseFile.id ? caseFile : c).toList();
   }
 
   /// Dosyayı kapatır (soft delete/status change). Bağlı kayıtlar korunur.
@@ -80,7 +130,6 @@ class CaseService {
     if (status == CaseStatus.closed) {
       caseFile.closeDate = DateTime.now();
     }
-    caseFile.updatedAt = DateTime.now();
-    await caseFile.save();
+    await update(caseFile);
   }
 }
