@@ -261,3 +261,48 @@ jobs:
         with:
           name: law-app-release
           path: build/app/outputs/flutter-apk/app-release.apk
+
+  # ---------------------------------------------------------------------
+  # WEB BUILD (D021, 2026-09-13) - Android job'undan TAMAMEN BAĞIMSIZ,
+  # aynı anda paralel çalışır. Android tarafına hiçbir riski yok - ayrı bir
+  # job, ayrı bir platform klasörü (web/), aynı android/ gibi her build'de
+  # sıfırdan üretiliyor (D003.1'deki mantığın aynısı).
+  #
+  # NOT: Bu adım sadece "web için derleniyor mu" sorusunu cevaplıyor.
+  # Üretilen web/build çıktısı gerçekten Firebase'e bağlanabilmek için
+  # lib/firebase_options.dart'taki PLACEHOLDER değerlerin gerçek Firebase
+  # Web config değerleriyle değiştirilmesi gerekiyor - bu olmadan build
+  # BAŞARILI olur ama uygulama tarayıcıda açılınca giriş/Firestore
+  # ÇALIŞMAZ.
+  # ---------------------------------------------------------------------
+  build-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Generate a fresh web scaffold matching this Flutter version
+        run: |
+          flutter create --platforms=web --project-name=law_app --org=com.utkusengun /tmp/web_scaffold
+          rm -rf web
+          cp -r /tmp/web_scaffold/web web
+          # Uygulama adı/başlık - web/index.html'deki varsayılan başlığı
+          # düzeltiyoruz (kullanıcı tarayıcı sekmesinde "law_app" değil
+          # "Avukat Asistan" görsün).
+          sed -i 's/<title>law_app<\/title>/<title>Avukat Asistan<\/title>/' web/index.html || true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build release web bundle
+        run: flutter build web --release
+
+      - name: Upload web build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: law-app-web
+          path: build/web

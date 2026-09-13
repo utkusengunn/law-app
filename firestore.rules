@@ -1,0 +1,30 @@
+rules_version = '2';
+
+// Avukat Asistan - Firestore Güvenlik Kuralları (D019, 2026-09-13)
+//
+// Bu dosya CI/build sürecinin bir parçası DEĞİL - Firebase Console'da elle
+// uygulanması gerekiyor (Firestore Database > Kurallar sekmesi > bu
+// içeriği yapıştırıp "Yayınla"). Uygulama kodu bu kuralları hiçbir zaman
+// otomatik göndermiyor.
+//
+// Mantık: her avukatın verisi kendi UID'sinin altındaki alt-koleksiyonlarda
+// tutuluyor (users/{uid}/clients/{id} gibi). Ekip yönetimi olmadığı için
+// (D019) tek kural yeterli: bir kullanıcı SADECE kendi uid'i altındaki
+// dokümanları okuyup yazabilir, başkasınınkine hiç erişemez.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+
+      match /{document=**} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+
+    // Yukarıdaki dışında kalan her şey (yanlışlıkla açık bir koleksiyon
+    // oluşursa) varsayılan olarak KAPALI.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
